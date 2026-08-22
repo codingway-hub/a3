@@ -1,0 +1,22 @@
+pkg/schema/event.go
+  s_b303b5a128ba27::t_317ca6de4e43b5 55-58,60
+  s_b303b5a128ba27::t_e3779cc25dd6de 59
+pkg/schema/event_test.go
+  s_b303b5a128ba27::t_f648a931898a3c 193-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "05ba819abbe92e3ff9e30b31b167820438349448",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
