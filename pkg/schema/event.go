@@ -137,8 +137,15 @@ func (event Event) Validate() error {
 		if event.ToolCallID == "" {
 			return errors.New("tool_result 事件 tool_call_id 不能为空")
 		}
+		// ToolOutput 允许为 nil：结果内容可能被抑制或过大丢弃。
 	default:
 		return fmt.Errorf("event_type 不合法: %q（允许值: session_start/conversation/tool_call/tool_result）", event.EventType)
+	}
+
+	for riskTagIndex := range event.RiskTags {
+		if riskTagErr := event.RiskTags[riskTagIndex].Validate(); riskTagErr != nil {
+			return fmt.Errorf("risk_tags[%d]: %w", riskTagIndex, riskTagErr)
+		}
 	}
 	return nil
 }
@@ -164,13 +171,14 @@ func (riskTag RiskTag) Validate() error {
 	return nil
 }
 
-// TruncateSummary 按字节上限 4096 截断摘要文本：不截断 UTF-8 rune 中间（回退到完整 rune 边界），
-// 发生截断时追加 "...(truncated)" 标记；未超限的文本原样返回。
+// TruncateSummary 按字节上限 4096 截断摘要文本：为 "...(truncated)" 后缀预留预算后按完整
+// rune 边界回退截断，保证总输出恒不超过 4096 字节；未超限的文本原样返回。
 func TruncateSummary(summaryText string) string {
 	if len(summaryText) <= maxSummaryBytes {
 		return summaryText
 	}
-	truncatedText := summaryText[:maxSummaryBytes]
+	contentBudget := maxSummaryBytes - len(truncatedSuffix) // 为后缀预留预算，保证总输出不超上限
+	truncatedText := summaryText[:contentBudget]
 	// 回退到完整 rune 边界：末尾若是不完整/非法的字节序列（含仅剩首字节的情形），逐字节丢弃。
 	for len(truncatedText) > 0 {
 		lastRune, runeSize := utf8.DecodeLastRuneInString(truncatedText)

@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,16 @@ func fullyPopulatedEvent() Event {
 	populatedEvent.RiskTags = []RiskTag{minimalValidRiskTag()}
 	populatedEvent.Extra = json.RawMessage(`{"cwd":"/Users/liu/code/a3","gitBranch":"feat/v1-mvp"}`)
 	return populatedEvent
+}
+
+// sortedJSONKeys 返回反序列化后 JSON 对象的键名切片（升序），便于做键集合精确断言。
+func sortedJSONKeys(jsonFields map[string]json.RawMessage) []string {
+	keyNames := make([]string, 0, len(jsonFields))
+	for keyName := range jsonFields {
+		keyNames = append(keyNames, keyName)
+	}
+	sort.Strings(keyNames)
+	return keyNames
 }
 
 func TestEventValidate(t *testing.T) {
@@ -137,6 +148,21 @@ func TestEventValidate(t *testing.T) {
 		missingToolCallIDResult.ToolCallID = ""
 		assert.Error(t, missingToolCallIDResult.Validate())
 	})
+
+	t.Run("risk_tags 级联校验", func(t *testing.T) {
+		eventWithValidRiskTag := minimalValidEvent()
+		eventWithValidRiskTag.RiskTags = []RiskTag{minimalValidRiskTag()}
+		assert.NoError(t, eventWithValidRiskTag.Validate(), "合法 RiskTag 不应影响事件校验")
+
+		eventWithInvalidRiskTag := minimalValidEvent()
+		eventWithInvalidRiskTag.RiskTags = []RiskTag{
+			minimalValidRiskTag(),
+			{Code: "cmd.git_force_push", Name: "Git 强制推送", Severity: Severity("critical"), Action: RiskActionAlert},
+		}
+		invalidTagErr := eventWithInvalidRiskTag.Validate()
+		require.Error(t, invalidTagErr, "嵌套非法 RiskTag 应导致事件校验失败")
+		assert.Contains(t, invalidTagErr.Error(), "risk_tags[1]", "错误信息应带出非法标签的索引")
+	})
 }
 
 func TestRiskTagValidate(t *testing.T) {
@@ -185,16 +211,29 @@ func TestEventJSONRoundTrip(t *testing.T) {
 		encodedBytes, marshalErr := json.Marshal(fullyPopulatedEvent())
 		require.NoError(t, marshalErr)
 
-		for _, expectedKey := range []string{
-			`"event_id"`, `"event_type"`, `"agent_type"`, `"session_id"`, `"device_id"`,
-			`"occurred_at"`, `"role"`, `"content"`, `"tool_name"`, `"tool_call_id"`,
-			`"tool_input"`, `"tool_output"`, `"source_method"`, `"risk_tags"`, `"extra"`,
-			`"is_error"`, `"summary"`,
-			// RiskTag 键名同样锁定为 snake_case，防止回归。
-			`"code"`, `"name"`, `"severity"`, `"action"`, `"matched_rule"`, `"snippet"`,
-		} {
-			assert.Contains(t, string(encodedBytes), expectedKey, "JSON 中应包含键 %s", expectedKey)
+		var topLevelFields map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(encodedBytes, &topLevelFields))
+
+		expectedTopLevelKeys := []string{
+			"agent_type", "content", "device_id", "event_id", "event_type",
+			"extra", "occurred_at", "risk_tags", "role", "session_id",
+			"source_method", "tool_call_id", "tool_input", "tool_name", "tool_output",
 		}
+		assert.Equal(t, expectedTopLevelKeys, sortedJSONKeys(topLevelFields),
+			"顶层键集合应与契约精确一致（不多不少）")
+
+		var toolOutputFields map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(topLevelFields["tool_output"], &toolOutputFields))
+		assert.Equal(t, []string{"is_error", "summary"}, sortedJSONKeys(toolOutputFields),
+			"ToolOutput 键集合应与契约精确一致")
+
+		var decodedRiskTags []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(topLevelFields["risk_tags"], &decodedRiskTags))
+		require.Len(t, decodedRiskTags, 1)
+		assert.Equal(t,
+			[]string{"action", "code", "matched_rule", "name", "severity", "snippet"},
+			sortedJSONKeys(decodedRiskTags[0]),
+			"RiskTag 键集合应为 snake_case 且与契约精确一致")
 	})
 }
 
@@ -209,19 +248,33 @@ func TestTruncateSummary(t *testing.T) {
 		assert.Equal(t, boundarySummary, TruncateSummary(boundarySummary))
 	})
 
-	t.Run("超长 ASCII 文本按字节上限截断并追加标记", func(t *testing.T) {
-		longAsciiSummary := strings.Repeat("a", 5000)
-		expectedTruncated := strings.Repeat("a", 4096) + "...(truncated)"
-		assert.Equal(t, expectedTruncated, TruncateSummary(longAsciiSummary))
+	t.Run("超长 ASCII 文本按预算截断且总输出不超过上限", func(t *testing.T) {
+		longAsciiSummary := strings.Repeat("a", 10000)
+		truncatedAscii := TruncateSummary(longAsciiSummary)
+
+		assert.LessOrEqual(t, len(truncatedAscii), 4096, "总输出必须恒不超过 4096 字节")
+		// 为后缀预留预算："...(truncated)" 共 14 字节，正文最多 4082 字节 + 14 = 恰好 4096。
+		expectedTruncated := strings.Repeat("a", 4082) + "...(truncated)"
+		assert.Equal(t, expectedTruncated, truncatedAscii)
 	})
 
 	t.Run("多字节字符回退到完整 rune 边界截断", func(t *testing.T) {
+		longAccentSummary := strings.Repeat("é", 2500) // 每字符 2 字节，共 5000 字节
+		truncatedAccent := TruncateSummary(longAccentSummary)
+
+		assert.True(t, utf8.ValidString(truncatedAccent), "截断结果必须是合法 UTF-8 字符串")
+		// 预算 4082 字节恰容纳 2041 个完整字符（4082 字节），无残缺字节需回退。
+		expectedAccentTruncated := strings.Repeat("é", 2041) + "...(truncated)"
+		assert.Equal(t, expectedAccentTruncated, truncatedAccent)
+	})
+
+	t.Run("三字节汉字回退到完整 rune 边界截断", func(t *testing.T) {
 		longChineseSummary := strings.Repeat("中", 2000) // 每个汉字 3 字节，共 6000 字节
 		truncatedChinese := TruncateSummary(longChineseSummary)
 
 		assert.True(t, utf8.ValidString(truncatedChinese), "截断结果必须是合法 UTF-8 字符串")
-		// 4096 字节上限内可容纳 1365 个完整汉字（4095 字节），剩余 1 字节回退丢弃。
-		expectedChineseTruncated := strings.Repeat("中", 1365) + "...(truncated)"
+		// 预算 4082 字节容纳 1360 个完整汉字（4080 字节），末尾残缺 2 字节回退丢弃。
+		expectedChineseTruncated := strings.Repeat("中", 1360) + "...(truncated)"
 		assert.Equal(t, expectedChineseTruncated, truncatedChinese)
 	})
 }
