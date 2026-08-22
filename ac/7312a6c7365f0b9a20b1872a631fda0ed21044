@@ -1,0 +1,35 @@
+internal/server/store/migrate.go
+  s_b303b5a128ba27::t_cee79d270372e8 1-146
+go.mod
+  s_b303b5a128ba27::t_a2bf603bbc978f 5-8
+  s_b303b5a128ba27::t_e7656c745fb8d0 10-15
+migrations/0001_init.up.sql
+  s_b303b5a128ba27::t_e524c400cc1688 113
+  s_b303b5a128ba27::t_52267fa13b04c7 1-112,114-139
+migrations/embed.go
+  s_b303b5a128ba27::t_8531c6a203a05d 1-11
+internal/server/store/migrate_test.go
+  s_b303b5a128ba27::t_95ebdc07d7f2d2 1-10,12-173,176-254
+  s_b303b5a128ba27::t_4d092577a51e94 174-175
+  s_b303b5a128ba27::t_a2229332f46f95 11
+migrations/0001_init.down.sql
+  s_b303b5a128ba27::t_33e22379898b7a 1-15
+go.sum
+  s_b303b5a128ba27::t_5c0eed927299fc 1-13,18-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ac7312a6c7365f0b9a20b1872a631fda0ed21044",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
