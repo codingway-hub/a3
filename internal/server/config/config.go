@@ -1,0 +1,77 @@
+// Package config 读取服务端环境变量配置并提供合理缺省值。
+package config
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"strconv"
+)
+
+// Config 是服务端运行配置。
+type Config struct {
+	Addr                   string // 监听地址
+	DatabaseURL            string // PostgreSQL 连接串
+	JWTSecret              string // 控制台 JWT 签名密钥
+	JWTSecretGenerated     bool   // JWTSecret 是否为自动生成的（需日志警告提醒持久化）
+	AdminUsername          string
+	AdminPassword          string
+	AdminPasswordGenerated bool
+	AllowAutoRegister      bool   // 对应 A3_ALLOW_AUTO_REGISTER，单机模式默认开放
+	WebDist                string // 前端静态目录；空则不托管
+}
+
+// Load 从环境变量加载配置；缺省值满足本地单机开发开箱即用。
+func Load() (*Config, error) {
+	serverConfig := &Config{
+		Addr:          envOrDefault("A3_ADDR", ":8080"),
+		DatabaseURL:   envOrDefault("A3_DATABASE_URL", "postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable"),
+		AdminUsername: envOrDefault("A3_ADMIN_USER", "admin"),
+		WebDist:       os.Getenv("A3_WEB_DIST"),
+	}
+
+	var err error
+	serverConfig.AllowAutoRegister, err = strconv.ParseBool(envOrDefault("A3_ALLOW_AUTO_REGISTER", "true"))
+	if err != nil {
+		return nil, fmt.Errorf("A3_ALLOW_AUTO_REGISTER 不是合法布尔值: %w", err)
+	}
+
+	// JWT 密钥未配置时随机生成：重启后所有控制台会话失效（仅提示，不阻断）
+	serverConfig.JWTSecret = os.Getenv("A3_JWT_SECRET")
+	if serverConfig.JWTSecret == "" {
+		generatedSecret, generateErr := randomHex(32)
+		if generateErr != nil {
+			return nil, fmt.Errorf("生成 JWT 密钥失败: %w", generateErr)
+		}
+		serverConfig.JWTSecret = generatedSecret
+		serverConfig.JWTSecretGenerated = true
+	}
+
+	// 管理员口令未配置时同样随机生成并提示（首次启动可从日志获取）
+	serverConfig.AdminPassword = os.Getenv("A3_ADMIN_PASSWORD")
+	if serverConfig.AdminPassword == "" {
+		generatedPassword, generateErr := randomHex(8)
+		if generateErr != nil {
+			return nil, fmt.Errorf("生成管理员口令失败: %w", generateErr)
+		}
+		serverConfig.AdminPassword = generatedPassword
+		serverConfig.AdminPasswordGenerated = true
+	}
+	return serverConfig, nil
+}
+
+func envOrDefault(name string, defaultValue string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func randomHex(byteLength int) (string, error) {
+	randomBytes := make([]byte, byteLength)
+	if _, readErr := rand.Read(randomBytes); readErr != nil {
+		return "", readErr
+	}
+	return hex.EncodeToString(randomBytes), nil
+}
