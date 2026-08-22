@@ -1,0 +1,33 @@
+pkg/schema/event_test.go
+  s_b303b5a128ba27::t_2bc9eea0b6e0ad 251-255,258,262-265,267-270
+  s_b303b5a128ba27::t_e61dfe1ad66c98 5
+  s_b303b5a128ba27::t_11008eb63b8d60 256-257,266,271,276-277
+  s_b303b5a128ba27::t_5dde35b5f083ed 214-220,222-236
+  s_b303b5a128ba27::t_f69ad792aba202 151-165
+  s_b303b5a128ba27::t_20872933448d3f 56-65
+pkg/schema/event.go
+  s_b303b5a128ba27::t_462d23f19e1cab 140,144-148
+  s_b303b5a128ba27::t_6e4c0578ae5b22 174-175,180-181
+  s_b303b5a128ba27::t_bf50104606a33d 149
+docs/plans/2026-08-22-v1.0-implementation-design.md
+  s_b303b5a128ba27::t_947c9b62f6a484 99,103
+  s_b303b5a128ba27::t_020ea3be2e753e 91
+  s_b303b5a128ba27::t_96684542c48772 86
+  s_b303b5a128ba27::t_e3ef4d2633fdc8 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "dd1d38f08682e93f1f681c85343d30aa994b9481",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
