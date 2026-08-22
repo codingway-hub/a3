@@ -1,0 +1,25 @@
+docs/plans/2026-08-22-v1.0-implementation-design.md
+  s_b303b5a128ba27::t_cfa61d58ca4429 1-226
+"docs/a3 (AI Agent Audit) _ 开源项目业务说明 (README-Style BRD).md"
+  s_b303b5a128ba27::t_ebeb8d10148e8a 1-119
+"docs/a3 (AI Agent Audit) 整体软件技术架构设计（通用可扩展基座）.md"
+  s_b303b5a128ba27::t_e8dc41c8f1a8a3 1-133
+"docs/a3 v1.0 一期落地技术方案（ClaudeCode 专属实现文档）.md"
+  s_b303b5a128ba27::t_f2dd6266fa6202 1-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "24818c34530eb8516b23798783f072de40439533",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
