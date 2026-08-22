@@ -1,0 +1,29 @@
+cmd/server/main.go
+  s_b303b5a128ba27::t_27ff9b57222d66 1-7
+cmd/agent/main.go
+  s_b303b5a128ba27::t_3a30b57156c05c 1-7
+.gitignore
+  s_b303b5a128ba27::t_be81fe2bd9bec6 1-7
+deploy/dev/docker-compose.dev.yml
+  s_b303b5a128ba27::t_427a928e77efd8 1-20
+go.mod
+  s_b303b5a128ba27::t_1d281da4aa5b94 1-3
+Makefile
+  s_b303b5a128ba27::t_81255016cee43e 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6b179a5a0b0ea60bd6581578d3732a90a22eba1c",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
