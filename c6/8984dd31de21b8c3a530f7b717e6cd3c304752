@@ -1,0 +1,28 @@
+scripts/smoke-server.sh
+  s_b303b5a128ba27::t_0f69b5be44ecfd 1-54
+cmd/server/main.go
+  s_b303b5a128ba27::t_62d83a99d103af 44,49
+  s_b303b5a128ba27::t_047b8b659db065 9
+  s_b303b5a128ba27::t_828f496189c1f0 110-112,114-120,122-125,127-129,132,134-138
+  s_b303b5a128ba27::t_c4b2cc848af256 1,4-8,10-22,25-43,45-48,50-109,113,126,130-131,133
+  s_b303b5a128ba27::t_aa86ac06874bbd 121
+internal/server/config/config.go
+  s_b303b5a128ba27::t_39552b2c54c70d 1-13,20,23-27,30,32-77
+  s_b303b5a128ba27::t_fdcc7cb227f084 14-19,21-22,28-29,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c68984dd31de21b8c3a530f7b717e6cd3c304752",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
