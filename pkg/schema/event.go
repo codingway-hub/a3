@@ -52,12 +52,12 @@ type RiskAction string
 
 // RiskTag 规则命中后打在事件上的风险标签。
 type RiskTag struct {
-	Code        string     // 如 dlp.aws_access_key、cmd.git_force_push
-	Name        string     // 中文名称（告警展示用）
-	Severity    Severity   // 风险等级
-	Action      RiskAction // 处置动作
-	MatchedRule string     // 规则 ID
-	Snippet     string     // 命中内容片段（已脱敏）
+	Code        string     `json:"code"`         // 如 dlp.aws_access_key、cmd.git_force_push
+	Name        string     `json:"name"`         // 中文名称（告警展示用）
+	Severity    Severity   `json:"severity"`     // 风险等级
+	Action      RiskAction `json:"action"`       // 处置动作
+	MatchedRule string     `json:"matched_rule"` // 规则 ID
+	Snippet     string     `json:"snippet"`      // 命中内容片段（已脱敏）
 }
 
 // ToolOutput 工具执行结果摘要。

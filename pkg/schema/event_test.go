@@ -190,6 +190,8 @@ func TestEventJSONRoundTrip(t *testing.T) {
 			`"occurred_at"`, `"role"`, `"content"`, `"tool_name"`, `"tool_call_id"`,
 			`"tool_input"`, `"tool_output"`, `"source_method"`, `"risk_tags"`, `"extra"`,
 			`"is_error"`, `"summary"`,
+			// RiskTag 键名同样锁定为 snake_case，防止回归。
+			`"code"`, `"name"`, `"severity"`, `"action"`, `"matched_rule"`, `"snippet"`,
 		} {
 			assert.Contains(t, string(encodedBytes), expectedKey, "JSON 中应包含键 %s", expectedKey)
 		}
