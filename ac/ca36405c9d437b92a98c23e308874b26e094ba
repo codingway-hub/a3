@@ -1,0 +1,49 @@
+internal/server/api/router.go
+  s_b303b5a128ba27::t_56fc0c5f3011d7 25,38,46
+  s_b303b5a128ba27::t_29807a959888e6 64-68
+  s_b303b5a128ba27::t_070138aa6cbefb 14
+  s_b303b5a128ba27::t_5dfc89eeac2a3f 1-13,15-24,26-37,39-45,47-63,69-105
+internal/server/api/console_devices.go
+  s_b303b5a128ba27::t_fdcc7cb227f084 32-35,37-39,41
+  s_b303b5a128ba27::t_c79c9ef9eef426 1-31,36,40,42-45
+internal/server/api/console_sessions.go
+  s_b303b5a128ba27::t_caa3b354bbee48 1-143
+internal/server/api/console_stats.go
+  s_b303b5a128ba27::t_5b81e38ab4cb98 1-62
+internal/server/api/console_alerts.go
+  s_b303b5a128ba27::t_9386802944375d 6,8,14-36
+  s_b303b5a128ba27::t_4db6854fd52cd3 1-3,7,9-13,37-72,74-100,103,113-118
+  s_b303b5a128ba27::t_b9748898fe5e56 4-5
+  s_b303b5a128ba27::t_fdcc7cb227f084 101-102,104-112
+  s_b303b5a128ba27::t_7fc7935345aada 73
+internal/server/api/console_test.go
+  s_b303b5a128ba27::t_9572e7694244dd 113
+  s_b303b5a128ba27::t_4bfff701ff3a6f 1-19,21-41,44-94,96-108,110-112,114-152,154-234,236-257,260-263
+  s_b303b5a128ba27::t_796927c5a69878 95
+  s_b303b5a128ba27::t_5b02077f835763 258-259
+  s_b303b5a128ba27::t_9a939e9c1f630f 42-43
+  s_b303b5a128ba27::t_4bd9e7f5227e23 153
+  s_b303b5a128ba27::t_fdcc7cb227f084 20,109
+  s_b303b5a128ba27::t_67fa40f5b18385 235
+internal/server/api/console_auth.go
+  s_b303b5a128ba27::t_3e895636333ca1 1-7,9-11,17-70
+  s_b303b5a128ba27::t_773e7752be1f8a 8,12-16
+internal/server/api/console_rules.go
+  s_b303b5a128ba27::t_f1a973c6cc3f4b 1-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "acca36405c9d437b92a98c23e308874b26e094ba",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
