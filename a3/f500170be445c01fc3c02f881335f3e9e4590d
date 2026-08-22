@@ -1,0 +1,29 @@
+pkg/schema/event_test.go
+  s_b303b5a128ba27::t_242732ec3098aa 1-251
+go.mod
+  s_b303b5a128ba27::t_634a978ca0d3a2 4-7
+pkg/schema/event.go
+  s_b303b5a128ba27::t_7744bf9a79f103 1-70,74-75,79-115,117-135,140-173,180-183
+  s_b303b5a128ba27::t_9254574fd80ada 136-139
+  s_b303b5a128ba27::t_a97a8c016e9786 116
+  s_b303b5a128ba27::t_79c6004e81a28c 174-179
+  s_b303b5a128ba27::t_676ae4ce4b8702 71-73,76-78
+go.sum
+  s_b303b5a128ba27::t_5ae6a8dd4da514 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a3f500170be445c01fc3c02f881335f3e9e4590d",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
