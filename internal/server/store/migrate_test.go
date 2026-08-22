@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"slices"
 	"testing"
@@ -11,6 +12,16 @@ import (
 	"github.com/codingway-hub/a3/internal/server/store"
 	"github.com/codingway-hub/a3/migrations"
 )
+
+// countEmbeddedUpMigrations 统计内嵌的 up 迁移文件数（期望应用版本数随之联动）。
+func countEmbeddedUpMigrations(t *testing.T) int {
+	t.Helper()
+	upFileMatches, globErr := fs.Glob(migrations.FS, "*.up.sql")
+	if globErr != nil {
+		t.Fatalf("枚举内嵌迁移文件失败: %v", globErr)
+	}
+	return len(upFileMatches)
+}
 
 // defaultTestDatabaseURL 本地开发库默认连接串，与 deploy/dev/docker-compose.dev.yml 对齐。
 const defaultTestDatabaseURL = "postgres://a3:a3@127.0.0.1:5433/a3_test?sslmode=disable"
@@ -86,8 +97,10 @@ func TestMigrateIdempotentOnRepeatedCall(t *testing.T) {
 		t.Fatalf("第一次 Migrate 不应报错: %v", firstMigrateErr)
 	}
 	appliedVersionCount := countAppliedVersions(t, testConn)
-	if appliedVersionCount != 1 {
-		t.Fatalf("首次迁移后 schema_migrations 应恰好记录 1 个版本, 实际 %d", appliedVersionCount)
+	expectedVersionCount := countEmbeddedUpMigrations(t)
+	if appliedVersionCount != expectedVersionCount {
+		t.Fatalf("首次迁移后 schema_migrations 应恰好记录 %d 个版本（与内嵌 up 文件数一致）, 实际 %d",
+			expectedVersionCount, appliedVersionCount)
 	}
 
 	if secondMigrateErr := store.Migrate(testContext, testConn); secondMigrateErr != nil {
