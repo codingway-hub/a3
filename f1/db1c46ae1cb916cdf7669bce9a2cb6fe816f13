@@ -1,0 +1,78 @@
+internal/server/store/store.go
+  s_b303b5a128ba27::t_6834dceee6c854 27-36
+  s_b303b5a128ba27::t_997dbd784374e5 1-11,13-19,37-64
+  s_b303b5a128ba27::t_35e772c4c70536 12,20-26,65-68
+internal/server/store/alerts_test.go
+  s_b303b5a128ba27::t_8140ba821d33c2 1-77
+internal/server/store/alerts.go
+  s_b303b5a128ba27::t_7487e146a8c6a9 1-131
+internal/server/store/rules_test.go
+  s_b303b5a128ba27::t_a432fc8490c981 7
+  s_b303b5a128ba27::t_55c28bf359dbcc 1-6,8-48,51-53,58,70-71,73
+  s_b303b5a128ba27::t_c13e7735f925aa 49-50,54-57,59-69,72
+migrations/0002_device_fingerprint.down.sql
+  s_b303b5a128ba27::t_83d579ca8fe06b 1-4
+internal/server/store/rules.go
+  s_b303b5a128ba27::t_f3ba97d57577ee 1-77
+internal/server/store/sessions_test.go
+  s_b303b5a128ba27::t_34d5e07f845ebd 1-37,50-128,130-164
+  s_b303b5a128ba27::t_ecc58508476d0f 39-49
+  s_b303b5a128ba27::t_709bdc9c08d1ec 129
+  s_b303b5a128ba27::t_01427bd5fc3c66 38
+internal/server/store/sessions.go
+  s_b303b5a128ba27::t_7c6493aac05e9e 66-71,75-76,79,82,85,88,90-97,105,108,113
+  s_b303b5a128ba27::t_9da36449502a84 6-7,72,74,114-115,118
+  s_b303b5a128ba27::t_c1ba2f9120ca0b 1-5,8-65,73,77-78,80-81,83-84,86-87,89,98-104,106-107,109-112,116-117,119-158
+internal/server/store/devices_test.go
+  s_b303b5a128ba27::t_e68b47182edfdf 1-85
+internal/server/store/migrate_test.go
+  s_b303b5a128ba27::t_cbb38377755fff 100-103
+  s_b303b5a128ba27::t_c25997c496e0b5 5,16-24
+  s_b303b5a128ba27::t_051c0686606628 25
+migrations/0002_device_fingerprint.up.sql
+  s_b303b5a128ba27::t_87bb6c1d43c1db 1-6
+internal/server/store/events_test.go
+  s_b303b5a128ba27::t_9a7c001535cd95 1-36,38,40,42,44,46,48,50,52,54-73,76-130
+  s_b303b5a128ba27::t_33838e7879bdbc 37,39,41,43,45,47,51,53
+  s_b303b5a128ba27::t_dc3a3c2b6d19bc 49
+  s_b303b5a128ba27::t_f7428be101eefa 74-75
+internal/server/store/events.go
+  s_b303b5a128ba27::t_ee2109b9468ac2 1-12,21-23,25,29,31-33,35-41,44-56,58,60,62-106
+  s_b303b5a128ba27::t_f3986d4bffaebb 24,26-28,30,34,42-43,57,59,61
+  s_b303b5a128ba27::t_8c1d021ba32d93 13-20
+internal/server/store/devices.go
+  s_b303b5a128ba27::t_cdc4221a3b3ce1 89-91
+  s_b303b5a128ba27::t_9d19aa90123246 31-33
+  s_b303b5a128ba27::t_8aa3f7b15e9cef 13-24,27,35-36,38-39,41-67
+  s_b303b5a128ba27::t_467dea8313dd73 75-77
+  s_b303b5a128ba27::t_cd7192a72ddfd7 116-118
+  s_b303b5a128ba27::t_fc1cdc784fbc33 1-12,25-26,28-30,34,37,40,68-74,78-88,92-115,119-124
+Makefile
+  s_b303b5a128ba27::t_0c970dcf24f9dc 21-24
+  s_b303b5a128ba27::t_1e438efe99700a 4
+  s_b303b5a128ba27::t_0e41b1c3fd3fb8 6,8
+internal/server/store/store_test.go
+  s_b303b5a128ba27::t_0d83948e22bb44 1-35,37-41,57-64
+  s_b303b5a128ba27::t_0325d1ffa53b67 36
+  s_b303b5a128ba27::t_8eb05f386fda53 42-56
+internal/servetest/db.go
+  s_b303b5a128ba27::t_d949f41617adb5 11
+  s_b303b5a128ba27::t_e9034b665453d3 1-10,12-42,44-63
+  s_b303b5a128ba27::t_7cda7190d48faa 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f1db1c46ae1cb916cdf7669bce9a2cb6fe816f13",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
