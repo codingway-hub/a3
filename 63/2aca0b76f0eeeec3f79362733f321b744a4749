@@ -1,0 +1,32 @@
+cmd/agent/pipeline.go
+  s_b303b5a128ba27::t_531bb299ec040d 116
+  s_b303b5a128ba27::t_763b3b43d0fb7e 210
+  s_b303b5a128ba27::t_5c858f8d9a1517 185-187
+scripts/smoke-agent.sh
+  s_b303b5a128ba27::t_412f543ac2b9b0 46
+Makefile
+  s_b303b5a128ba27::t_2de1227823e19c 4
+  s_b303b5a128ba27::t_bf39a5c1c5f83c 25-29
+  s_b303b5a128ba27::t_0673d253c531c1 30-33
+scripts/offline-drill.sh
+  s_b303b5a128ba27::t_b6166df47b9473 1-16,22-49,52-75,77-82
+  s_b303b5a128ba27::t_d43e8e2f0c5e4b 50-51
+  s_b303b5a128ba27::t_8987108624e95c 76
+  s_b303b5a128ba27::t_402e0223f8f0ff 17-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "632aca0b76f0eeeec3f79362733f321b744a4749",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
