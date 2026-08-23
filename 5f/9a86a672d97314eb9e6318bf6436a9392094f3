@@ -1,0 +1,22 @@
+deploy/docker-compose.team.yml
+  s_b303b5a128ba27::t_abe6009603ec3a 1-55
+Makefile
+  s_b303b5a128ba27::t_7d559349983276 5
+  s_b303b5a128ba27::t_23f65ac45ef1d6 50-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5f9a86a672d97314eb9e6318bf6436a9392094f3",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
