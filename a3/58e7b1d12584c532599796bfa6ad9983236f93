@@ -1,0 +1,24 @@
+internal/agent/plugins/claude/hook.go
+  s_b303b5a128ba27::t_a231e131e8ba6d 1-83,89-128,130-143
+  s_b303b5a128ba27::t_8c3cbd2ad938f5 84-88
+  s_b303b5a128ba27::t_805dac65872dcc 129
+internal/agent/plugins/claude/hook_test.go
+  s_b303b5a128ba27::t_7f031de221f74e 14
+  s_b303b5a128ba27::t_fdacd88fb9b8c4 1-13,15-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a358e7b1d12584c532599796bfa6ad9983236f93",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
