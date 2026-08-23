@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/codingway-hub/a3/pkg/schema"
 )
@@ -31,6 +32,8 @@ func NewEngine(ruleList []Rule, homeDir string) (*Engine, error) {
 }
 
 // NewSystemEngine 以当前进程用户主目录构建引擎（服务端装配入口）。
+// 注意：服务端拿不到各终端的真实 HOME，~ 归一化仅对"服务端与终端同机"场景生效；
+// 其余场景依赖 basename 兜底（id_rsa*、*.pem 等）。~/.ssh/* 等路径的权威判定在终端 Hook。
 func NewSystemEngine(ruleList []Rule) (*Engine, error) {
 	userHomeDir, homeErr := os.UserHomeDir()
 	if homeErr != nil {
@@ -124,10 +127,27 @@ func eventScanSources(event schema.Event) (commandSources []string, pathSources 
 						pathSources = append(pathSources, pathValue)
 					}
 				}
+				// 与终端侧对齐：命令文本切词后并入路径候选，覆盖 `cat ~/.ssh/id_rsa` 这类
+				// 命令内路径场景（终端 EvaluateHookInput 同样处理，见 plugin-claude rules.go）
+				for _, commandText := range commandSources {
+					pathSources = append(pathSources, tokenizeCommand(commandText)...)
+				}
 			}
 			// 整体 JSON 兜底扫描：覆盖非结构化键中的敏感串
 			textSources = append(textSources, string(event.ToolInput))
 		}
 	}
 	return commandSources, pathSources, textSources
+}
+
+// tokenizeCommand 将命令文本按空白与常见 shell 分隔符切词（与终端 plugin-claude 同语义），
+// 切词结果供 path 类规则作为候选扫描，覆盖命令内路径场景。
+func tokenizeCommand(commandText string) []string {
+	return strings.FieldsFunc(commandText, func(sepRune rune) bool {
+		switch sepRune {
+		case ' ', '\t', '\n', '"', '\'', ';', '|', '&', '(', ')':
+			return true
+		}
+		return false
+	})
 }
