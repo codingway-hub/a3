@@ -2,7 +2,7 @@ GO ?= go
 DOCKER_COMPOSE_DEV_FILE := deploy/dev/docker-compose.dev.yml
 DOCKER_COMPOSE_FILE := deploy/docker-compose.yml
 
-.PHONY: test build-agent build-server build-web web-install dev-db-up dev-db-down smoke smoke-agent offline-drill compose-up compose-down
+.PHONY: test build-agent build-server build-web web-install dev-db-up dev-db-down smoke smoke-agent offline-drill compose-up compose-down release-agent
 
 # 集成测试共享同一个本地库（a3_test），必须 -p 1 串行跑各包，避免互相 TRUNCATE 清场。
 test:
@@ -47,3 +47,14 @@ compose-up:
 
 compose-down:
 	docker compose -f $(DOCKER_COMPOSE_FILE) down
+
+# 跨平台构建终端采集器到 bin/release/（覆盖 darwin/linux/windows 三大 GOOS）。
+release-agent:
+	@mkdir -p bin/release
+	@for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do \
+	  releaseOS=$${platform%/*}; releaseArch=$${platform#*/}; \
+	  releaseSuffix=""; [ "$$releaseOS" = "windows" ] && releaseSuffix=".exe"; \
+	  echo "==> a3-agent-$$releaseOS-$$releaseArch$$releaseSuffix"; \
+	  CGO_ENABLED=0 GOOS=$$releaseOS GOARCH=$$releaseArch $(GO) build -trimpath -ldflags="-s -w" \
+	    -o bin/release/a3-agent-$$releaseOS-$$releaseArch$$releaseSuffix ./cmd/agent || exit 1; \
+	done
