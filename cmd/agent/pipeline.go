@@ -113,7 +113,7 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	}
 
 	batcherDone := make(chan struct{})
-	go batchingLoop(eventChannel, uploaderClient, spoolQueue, agentConfig.BatchSize,
+	go batchingLoop(ctx, eventChannel, uploaderClient, spoolQueue, agentConfig.BatchSize,
 		agentConfig.FlushInterval, logger, batcherDone)
 
 	replayerDone := make(chan struct{})
@@ -182,8 +182,9 @@ func maskEventContent(producedEvent *schema.Event) {
 }
 
 // batchingLoop 批处理：攒批（条数或时间阈值）后上报；可重试类失败整批入 spool。
-// 生命周期由 eventChannel 关闭驱动（runPipeline 在退出序列中负责关闭），故不感知主 ctx。
-func batchingLoop(eventChannel <-chan schema.Event,
+// 生命周期由 eventChannel 关闭驱动（runPipeline 在退出序列中负责关闭）；
+// 上报超时派生自主运行 ctx：退出信号一到，在途重试立即失败转本地缓存，断网下也能秒级优雅退出。
+func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 	uploaderClient *transport.Uploader, spoolQueue *spool.Spool,
 	batchLimit int, flushEvery time.Duration, logger *slog.Logger, doneChan chan<- struct{}) {
 	defer close(doneChan)
@@ -206,7 +207,7 @@ func batchingLoop(eventChannel <-chan schema.Event,
 			pendingEvents = pendingEvents[:0]
 			return
 		}
-		uploadCtx, cancelUpload := context.WithTimeout(context.Background(), batchUploadCtxTimeout)
+		uploadCtx, cancelUpload := context.WithTimeout(runCtx, batchUploadCtxTimeout)
 		uploadResult, uploadErr := uploaderClient.PostBatch(uploadCtx, pendingEvents)
 		cancelUpload()
 		switch {

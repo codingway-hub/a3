@@ -43,7 +43,7 @@ echo "    已拦截(exit=2)"
 echo "==> ⑤ Hook alert 演练：git reset --hard 放行且风险事件入本地缓存"
 printf '%s' '{"session_id":"smoke-hook","tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD~1"}}' \
   | "$AGENT_BIN" hook pretooluse 2>/dev/null
-SPOOL_COUNT=$(ls "$HOME/.a3/spool"/batch-*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+SPOOL_COUNT=$(find "$HOME/.a3/spool" -maxdepth 1 -name 'batch-*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
 [ "$SPOOL_COUNT" -ge 1 ] || { echo "❌ alert 风险事件未入缓存队列"; exit 1; }
 echo "    本地缓存批次 $SPOOL_COUNT 个"
 
