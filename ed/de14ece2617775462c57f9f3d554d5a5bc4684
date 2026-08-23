@@ -1,0 +1,27 @@
+internal/agent/plugins/claude/installer.go
+  s_b303b5a128ba27::t_584bbc49e8513e 221-223,228-230,233
+  s_b303b5a128ba27::t_391347def3996a 86,88,90-91,128
+  s_b303b5a128ba27::t_46985d6b86fa56 78,83
+  s_b303b5a128ba27::t_d21446480389c0 150-151,155,162,169,180,186,189
+  s_b303b5a128ba27::t_2d0508209cbba6 1-77,79-82,84-85,87,89,92-127,129-149,152-154,156-161,163-168,170-179,181-185,187-188,190-220,224-227,231-232,234-284
+internal/agent/plugins/claude/installer_test.go
+  s_b303b5a128ba27::t_30331e4aee0fc9 1-6,8-125,128-132
+  s_b303b5a128ba27::t_02a3af8c74eef2 126-127
+  s_b303b5a128ba27::t_2d149b0eb3531b 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "edde14ece2617775462c57f9f3d554d5a5bc4684",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
