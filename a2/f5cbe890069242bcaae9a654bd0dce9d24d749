@@ -1,0 +1,24 @@
+internal/agent/core/transport/uploader.go
+  s_b303b5a128ba27::t_83bae72d09bb0d 152-153,155-163
+  s_b303b5a128ba27::t_ccdb38802d5a8e 10
+  s_b303b5a128ba27::t_736161578fde9a 168
+  s_b303b5a128ba27::t_b0b6b6b3a80158 1-9,11-151,154,164-167,169-220
+internal/agent/core/transport/uploader_test.go
+  s_b303b5a128ba27::t_5acd62541c5bc2 1-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a2f5cbe890069242bcaae9a654bd0dce9d24d749",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
