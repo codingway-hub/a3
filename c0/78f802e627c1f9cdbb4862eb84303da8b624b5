@@ -1,0 +1,23 @@
+web/src/router/index.js
+  s_b303b5a128ba27::t_57c8872dca0d76 27-32
+web/src/utils/format.js
+  s_b303b5a128ba27::t_f9ff84da1372ba 1-44
+web/src/views/SessionListView.vue
+  s_b303b5a128ba27::t_2f78f0bc0fde0e 1-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c078f802e627c1f9cdbb4862eb84303da8b624b5",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
