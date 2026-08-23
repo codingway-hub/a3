@@ -1,0 +1,26 @@
+internal/agent/core/masking/mask_test.go
+  s_b303b5a128ba27::t_9f63f482a2cf37 15
+  s_b303b5a128ba27::t_2226d165b5691b 77,79
+  s_b303b5a128ba27::t_1d1cfbb1bc0898 19
+  s_b303b5a128ba27::t_abdb1b238515be 45-46
+  s_b303b5a128ba27::t_17acabddfa51f8 54,56
+  s_b303b5a128ba27::t_33a13ab582c2ae 1-14,16-18,20-44,47-53,55,57-76,78,80-82
+internal/agent/core/masking/mask.go
+  s_b303b5a128ba27::t_1704b743475158 1-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b3d5a3dd33c68cf5331bd0536e2a86f7c02f2860",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
