@@ -1,0 +1,22 @@
+Makefile
+  s_b303b5a128ba27::t_da1bc0a02f3e5e 4
+  s_b303b5a128ba27::t_1565a1eef17055 20-22
+  s_b303b5a128ba27::t_1f2e3a0b20beb2 16-19
+  s_b303b5a128ba27::t_c1d586f097c3b8 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f8437ad979b81bc2c7f0d4d4d4012eb955584901",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
