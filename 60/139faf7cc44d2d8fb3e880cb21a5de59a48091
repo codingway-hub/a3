@@ -1,0 +1,29 @@
+internal/agent/plugins/claude/rules.go
+  s_b303b5a128ba27::t_e6c3752cbfb1df 104-105
+  s_b303b5a128ba27::t_d13c048aeff5df 196-197,205
+  s_b303b5a128ba27::t_901b86a3a67881 145
+  s_b303b5a128ba27::t_4962ac40042187 45-46
+  s_b303b5a128ba27::t_4ab97fb85982c7 121-126
+  s_b303b5a128ba27::t_2e225a2dc66350 1-44,47-103,106-120,127-144,146-174,186-195,198-204,206-274,276-284
+  s_b303b5a128ba27::t_0355e94a668f56 175-185
+  s_b303b5a128ba27::t_3565bd68d2adf5 275
+internal/agent/plugins/claude/rules_test.go
+  s_b303b5a128ba27::t_ee2a705526a744 118
+  s_b303b5a128ba27::t_57ba433c9209a9 1-117,119-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "60139faf7cc44d2d8fb3e880cb21a5de59a48091",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
