@@ -24,6 +24,12 @@ const router = createRouter({
           component: () => import('../views/OverviewView.vue'),
           meta: { title: '概览' },
         },
+        {
+          path: 'sessions',
+          name: 'sessions',
+          component: () => import('../views/SessionListView.vue'),
+          meta: { title: '会话审计' },
+        },
       ],
     },
     {
