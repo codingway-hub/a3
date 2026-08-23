@@ -36,6 +36,18 @@ const router = createRouter({
           component: () => import('../views/SessionReplayView.vue'),
           meta: { title: '会话回放' },
         },
+        {
+          path: 'alerts',
+          name: 'alerts',
+          component: () => import('../views/AlertsView.vue'),
+          meta: { title: '告警中心' },
+        },
+        {
+          path: 'devices',
+          name: 'devices',
+          component: () => import('../views/DevicesView.vue'),
+          meta: { title: '设备管理' },
+        },
       ],
     },
     {
