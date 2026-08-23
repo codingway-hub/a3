@@ -1,0 +1,21 @@
+internal/agent/core/spool/spool_test.go
+  s_b303b5a128ba27::t_e495021f489c86 1-105
+internal/agent/core/spool/spool.go
+  s_b303b5a128ba27::t_56d36364c7de14 1-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5abdbfcbdc422d8b359e59eed6e887b00b66bfb2",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
