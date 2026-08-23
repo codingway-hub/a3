@@ -1,0 +1,28 @@
+web/src/stores/auth.js
+  s_b303b5a128ba27::t_4bf4d2bd833509 1-29
+web/src/views/LoginView.vue
+  s_b303b5a128ba27::t_8c7bf37bd03af7 1-101
+web/src/layout/MainLayout.vue
+  s_b303b5a128ba27::t_19ba1c14edab7a 1-119
+web/src/router/index.js
+  s_b303b5a128ba27::t_cd69f58f546d79 10,12-24,28-37
+  s_b303b5a128ba27::t_0bfde24d67fdd6 11
+  s_b303b5a128ba27::t_26213201aa6354 38-39
+  s_b303b5a128ba27::t_4d99a55163f19b 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5f6c914ce909c6cf909ca97b95f8031feeb015e3",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
