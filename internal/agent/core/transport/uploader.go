@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/codingway-hub/a3/internal/agent/core"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
@@ -43,12 +44,8 @@ type BatchResult struct {
 	Duplicates int `json:"duplicates"`
 }
 
-// batchEnvelope 上报请求体结构（与服务端 ingest 契约对齐）。
-type batchEnvelope struct {
-	AgentVersion string         `json:"agent_version"`
-	Plugins      []string       `json:"plugins"`
-	Events       []schema.Event `json:"events"`
-}
+// batchEnvelope 上报请求体（复用 core 层共用契约，别名保留测试引用）。
+type batchEnvelope = core.EventEnvelope
 
 // NonRetryableError 服务端明确拒绝（非 5xx 的 HTTP 错误），重试只会重复失败。
 type NonRetryableError struct {
