@@ -1,0 +1,36 @@
+internal/server/store/rules_test.go
+  s_b303b5a128ba27::t_a5aa81d5dbcd95 5,11-12
+  s_b303b5a128ba27::t_451158a22f61f1 77-116
+  s_b303b5a128ba27::t_f825cdd01e0e33 117
+internal/server/rules/engine.go
+  s_b303b5a128ba27::t_146c8f16221c4b 35-36
+  s_b303b5a128ba27::t_a51685d0bdd0b1 7
+  s_b303b5a128ba27::t_e703974626607c 132
+  s_b303b5a128ba27::t_002fac95791da5 130-131,133-134,142-152
+  s_b303b5a128ba27::t_eb34d6433ca6eb 153
+migrations/0003_builtin_rules_sync.up.sql
+  s_b303b5a128ba27::t_2acfc73f57b279 23-44
+  s_b303b5a128ba27::t_a79ad3fe32a8dd 15
+  s_b303b5a128ba27::t_94ff4c484c37ca 1-3
+  s_b303b5a128ba27::t_70e8697f8b8ad8 13-14,16-18
+  s_b303b5a128ba27::t_096d7fbb4e806d 4-12
+  s_b303b5a128ba27::t_62fa4efdceaf5b 19-22
+migrations/0003_builtin_rules_sync.down.sql
+  s_b303b5a128ba27::t_645d194dd7ac63 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "30d89c5de3e02089154072ffe5e8603b30fd53e0",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
