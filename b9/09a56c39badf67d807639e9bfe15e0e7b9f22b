@@ -1,0 +1,23 @@
+internal/agent/core/registry_test.go
+  s_b303b5a128ba27::t_8879241ba785ea 1-80
+internal/agent/core/registry.go
+  s_b303b5a128ba27::t_58b8c17c61a33d 1-57
+internal/agent/core/plugin.go
+  s_b303b5a128ba27::t_38401ebc830667 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b909a56c39badf67d807639e9bfe15e0e7b9f22b",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
