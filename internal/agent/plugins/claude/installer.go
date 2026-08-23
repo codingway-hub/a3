@@ -19,8 +19,8 @@ const backupGlobPattern = "settings.json.a3-bak-*"
 
 // hookEntry settings.json hooks.PreToolUse 数组元素结构。
 type hookEntry struct {
-	Matcher string      `json:"matcher"`
-	Hooks    []hookSpec `json:"hooks"`
+	Matcher string     `json:"matcher"`
+	Hooks   []hookSpec `json:"hooks"`
 }
 
 // hookSpec 单个 hook 命令。

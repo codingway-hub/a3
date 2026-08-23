@@ -87,7 +87,7 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 		return core.HookDecision{}, nil // 无法归属会话：仅放行不上报
 	}
 	riskEvent := schema.Event{
-		EventID:   uuidx.MustNewV5(NamespaceA3HookEvent,
+		EventID: uuidx.MustNewV5(NamespaceA3HookEvent,
 			hookRequest.SessionID+"|"+hookRequest.ToolName+"|"+string(hookRequest.ToolInput)),
 		EventType: schema.EventTypeToolCall,
 		AgentType: schema.AgentTypeClaudeCode, SessionID: hookRequest.SessionID,

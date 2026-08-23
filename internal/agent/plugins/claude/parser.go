@@ -235,7 +235,7 @@ func (parser *Parser) buildSessionStart(sourceLine claudeLine, occurredAt time.T
 		return schema.Event{}, marshalErr
 	}
 	return schema.Event{
-		EventID: uuidx.MustNewV5(uuidx.NamespaceA3SessionStart, sourceLine.SessionID),
+		EventID:   uuidx.MustNewV5(uuidx.NamespaceA3SessionStart, sourceLine.SessionID),
 		EventType: schema.EventTypeSessionStart, AgentType: schema.AgentTypeClaudeCode,
 		SessionID: sourceLine.SessionID, OccurredAt: occurredAt,
 		Extra: extraBytes, SourceMethod: schema.SourceMethodFileLog,
