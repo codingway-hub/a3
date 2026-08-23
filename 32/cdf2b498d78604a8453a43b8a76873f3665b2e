@@ -1,0 +1,39 @@
+web/vite.config.js
+  s_b303b5a128ba27::t_0568bbfb00b75a 1-14
+web/src/views/Placeholder.vue
+  s_b303b5a128ba27::t_99dd13e2b159c7 1-18
+web/src/App.vue
+  s_b303b5a128ba27::t_875d50e16885b8 1-7
+web/src/router/index.js
+  s_b303b5a128ba27::t_cd69f58f546d79 3-6,10-11
+  s_b303b5a128ba27::t_67dcb223bf2524 1-2,7-9
+web/index.html
+  s_b303b5a128ba27::t_172a6536305dee 1-12
+web/src/main.js
+  s_b303b5a128ba27::t_fe1e91be2b8c71 1-21
+web/src/api/request.js
+  s_b303b5a128ba27::t_e8b059af9552be 1-30,33-40
+  s_b303b5a128ba27::t_4bf47d5b44fe8a 31-32
+web/.gitignore
+  s_b303b5a128ba27::t_6db965dbdd2913 1-4
+web/package.json
+  s_b303b5a128ba27::t_9cd3307e6265ec 1-23
+web/package-lock.json
+  s_b303b5a128ba27::t_c896cfe41fde55 1-1937
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "32cdf2b498d78604a8453a43b8a76873f3665b2e",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
