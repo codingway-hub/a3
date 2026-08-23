@@ -1,0 +1,30 @@
+# a3 服务端一体化镜像：前端产物 → 服务端编译 → 轻量运行层。
+# 迁移 SQL 已 embed 进二进制，运行层除前端 dist 外无需任何资源文件。
+
+# ---- 阶段一：前端构建 ----
+FROM node:22-alpine AS web-builder
+WORKDIR /build/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# ---- 阶段二：服务端编译（CGO 关闭产出纯静态二进制） ----
+FROM golang:1.25-alpine AS server-builder
+WORKDIR /build/src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/a3-server ./cmd/server
+
+# ---- 阶段三：运行层 ----
+FROM alpine:3.20
+# 出站 HTTPS 上报链路依赖系统 CA；自签名单机部署可在采集器侧显式跳过校验
+RUN apk add --no-cache ca-certificates \
+  && adduser -D -H -s /sbin/nologin a3
+COPY --from=server-builder /out/a3-server /usr/local/bin/a3-server
+COPY --from=web-builder /build/web/dist /app/web/dist
+ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist
+EXPOSE 8080
+USER a3
+ENTRYPOINT ["a3-server"]

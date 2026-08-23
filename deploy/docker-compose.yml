@@ -1,0 +1,71 @@
+# a3 单机一体化部署：PostgreSQL + 服务端(含审计台静态资源与内嵌迁移)。
+# 用法：
+#   cp deploy/.env.example deploy/.env    # 设置管理员口令等
+#   docker compose -f deploy/docker-compose.yml up -d --build
+name: a3
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: a3
+      POSTGRES_PASSWORD: ${A3_POSTGRES_PASSWORD:-a3-change-me}
+      POSTGRES_DB: a3
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a3 -d a3"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      A3_ADDR: ":8080"
+      A3_DATABASE_URL: postgres://a3:${A3_POSTGRES_PASSWORD:-a3-change-me}@postgres:5432/a3?sslmode=disable
+      A3_ADMIN_USER: ${A3_ADMIN_USER:-admin}
+      A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
+      # 留空则每次重启随机生成，控制台需重新登录；生产建议显式设置
+      A3_JWT_SECRET: ${A3_JWT_SECRET:-}
+      # 单机模式开放终端自助注册；团队模式请改 false 并显式登记设备令牌
+      A3_ALLOW_AUTO_REGISTER: "true"
+    ports:
+      - "${A3_HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  pgdata:
+
+# ---- 一期预留：ClickHouse（海量事件分析加速，二期启用） ----
+# clickhouse:
+#   image: clickhouse/clickhouse-server:24-alpine
+#   restart: unless-stopped
+#   environment:
+#     CLICKHOUSE_USER: a3
+#     CLICKHOUSE_PASSWORD: change-me
+#   volumes:
+#     - clickhouse-data:/var/lib/clickhouse
+
+# ---- 一期预留：MinIO（导出文件对象存储，二期启用） ----
+# minio:
+#   image: minio/minio
+#   restart: unless-stopped
+#   command: server /data --console-address ":9001"
+#   environment:
+#     MINIO_ROOT_USER: a3
+#     MINIO_ROOT_PASSWORD: change-me
+#   volumes:
+#     - minio-data:/data

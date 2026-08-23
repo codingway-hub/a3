@@ -1,7 +1,8 @@
 GO ?= go
 DOCKER_COMPOSE_DEV_FILE := deploy/dev/docker-compose.dev.yml
+DOCKER_COMPOSE_FILE := deploy/docker-compose.yml
 
-.PHONY: test build-agent build-server build-web web-install dev-db-up dev-db-down smoke smoke-agent offline-drill
+.PHONY: test build-agent build-server build-web web-install dev-db-up dev-db-down smoke smoke-agent offline-drill compose-up compose-down
 
 # 集成测试共享同一个本地库（a3_test），必须 -p 1 串行跑各包，避免互相 TRUNCATE 清场。
 test:
@@ -39,3 +40,10 @@ smoke-agent:
 # 断网续传演练（用法同 smoke-agent）：断网批次落缓存 → 恢复后自动续传。
 offline-drill:
 	A3_SMOKE_BASE="$(A3_SMOKE_BASE)" A3_ADMIN_PASSWORD="$(A3_ADMIN_PASSWORD)" bash scripts/offline-drill.sh
+
+# 单机一体化部署：构建镜像并拉起 postgres+server（需先 cp deploy/.env.example deploy/.env）。
+compose-up:
+	docker compose -f $(DOCKER_COMPOSE_FILE) up -d --build
+
+compose-down:
+	docker compose -f $(DOCKER_COMPOSE_FILE) down
