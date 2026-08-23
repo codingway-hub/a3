@@ -1,7 +1,7 @@
 GO ?= go
 DOCKER_COMPOSE_DEV_FILE := deploy/dev/docker-compose.dev.yml
 
-.PHONY: test build-agent build-server dev-db-up dev-db-down smoke smoke-agent offline-drill
+.PHONY: test build-agent build-server build-web web-install dev-db-up dev-db-down smoke smoke-agent offline-drill
 
 # 集成测试共享同一个本地库（a3_test），必须 -p 1 串行跑各包，避免互相 TRUNCATE 清场。
 test:
@@ -12,6 +12,14 @@ build-agent:
 
 build-server:
 	$(GO) build -o bin/a3-server ./cmd/server
+
+# 首次安装前端依赖（生成 web/package-lock.json）。
+web-install:
+	cd web && npm install
+
+# 构建前端产物到 web/dist（服务端经 A3_WEB_DIST=./web/dist 托管）。
+build-web:
+	cd web && npm ci && npm run build
 
 dev-db-up:
 	docker compose -f $(DOCKER_COMPOSE_DEV_FILE) up -d
