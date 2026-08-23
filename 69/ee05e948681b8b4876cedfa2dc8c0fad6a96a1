@@ -1,0 +1,34 @@
+internal/agent/core/watcher/tailer.go
+  s_b303b5a128ba27::t_36634b2119052a 145-151
+  s_b303b5a128ba27::t_567dd253925ea9 29-30
+  s_b303b5a128ba27::t_2211b2a4b59fdf 82
+  s_b303b5a128ba27::t_42ebe6cce799ee 40-42,72-76
+  s_b303b5a128ba27::t_340004ff57d44e 126-128
+  s_b303b5a128ba27::t_699dccfd5c8061 1-28,31-39,43-49,52-71,77-81,83-92,94-125,129-144,152-263
+  s_b303b5a128ba27::t_64a79f235b97e7 50-51
+  s_b303b5a128ba27::t_d85d5f84fc8121 93
+internal/agent/core/watcher/tailer_test.go
+  s_b303b5a128ba27::t_797d85f91e3140 85,89-90
+  s_b303b5a128ba27::t_bfb016cda74b6d 121
+  s_b303b5a128ba27::t_c46addef6e00dc 36-37,39-43
+  s_b303b5a128ba27::t_82f66de5d898f1 138,142
+  s_b303b5a128ba27::t_a902873c14d1fc 1-15,19-35,38,44-67,70-84,86-88,91-120,122-137,139-141,143-184
+  s_b303b5a128ba27::t_d27fbf1eab6f59 68-69
+  s_b303b5a128ba27::t_42ebe6cce799ee 16-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "69ee05e948681b8b4876cedfa2dc8c0fad6a96a1",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
