@@ -1,0 +1,28 @@
+Dockerfile.server
+  s_b303b5a128ba27::t_befe624a68bfaa 1-30
+deploy/.env.example
+  s_b303b5a128ba27::t_110a76c6824237 1-15
+deploy/docker-compose.yml
+  s_b303b5a128ba27::t_34c83f4addad65 1-71
+.dockerignore
+  s_b303b5a128ba27::t_7cda5d01f95b4f 1-9
+Makefile
+  s_b303b5a128ba27::t_17744ef616d9d0 3,5
+  s_b303b5a128ba27::t_359e20ebf49873 43-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "edcbc6b8137b5c81540cebb53aff41d82fcdf7c2",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
