@@ -16,7 +16,15 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('../layout/MainLayout.vue'),
-      children: [],
+      redirect: '/overview',
+      children: [
+        {
+          path: 'overview',
+          name: 'overview',
+          component: () => import('../views/OverviewView.vue'),
+          meta: { title: '概览' },
+        },
+      ],
     },
     {
       path: '/:pathMatch(.*)*',
