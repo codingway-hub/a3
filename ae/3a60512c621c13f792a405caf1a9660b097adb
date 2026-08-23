@@ -1,0 +1,23 @@
+web/src/components/RiskTagRow.vue
+  s_b303b5a128ba27::t_92e01f73560be2 1-39
+web/src/views/SessionReplayView.vue
+  s_b303b5a128ba27::t_44b50db0db6da8 1-394
+web/src/router/index.js
+  s_b303b5a128ba27::t_ac40c6ab2b3618 33-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ae3a60512c621c13f792a405caf1a9660b097adb",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
