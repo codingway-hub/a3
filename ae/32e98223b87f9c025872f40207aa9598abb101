@@ -1,0 +1,29 @@
+internal/server/api/console_alerts.go
+  s_b303b5a128ba27::t_463fea226b2ffe 43
+  s_b303b5a128ba27::t_fc948edba68d89 94-96
+  s_b303b5a128ba27::t_89e9b54b37c1c6 15-27
+  s_b303b5a128ba27::t_0def16920b8de5 92
+internal/server/store/alerts.go
+  s_b303b5a128ba27::t_11b24c1f640cdf 7-8
+  s_b303b5a128ba27::t_613f5ab7740f0c 74-75,77-79,81-83,91-99,102,107,118-141,143-147,149,151
+internal/server/api/console_test.go
+  s_b303b5a128ba27::t_20740da3e9eafa 265-272
+  s_b303b5a128ba27::t_e2154fe494b954 273-310
+  s_b303b5a128ba27::t_f6dad8f2da91c5 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ae32e98223b87f9c025872f40207aa9598abb101",
+  "prompts": {},
+  "sessions": {
+    "s_b303b5a128ba27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec6bc5-00d5-4bca-8a02-f7dde6953525",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "liuwei654 <15712315+liuwei654@user.noreply.gitee.com>"
+    }
+  }
+}
