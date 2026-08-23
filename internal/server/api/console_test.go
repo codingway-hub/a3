@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -260,4 +261,50 @@ func TestDevicesAndRulesEndpoints(t *testing.T) {
 
 	// 恢复启用状态，避免污染其他用例的种子断言
 	require.NoError(t, test.eventStore.SetRuleEnabled(context.Background(), "dlp.jwt", true))
+}
+
+// TestAlertsExportNotClampedByListPagination 守护导出数据完整性：
+// 列表接口钳制 pageSize≤100，导出必须全量返回（回归 I-1）。
+func TestAlertsExportNotClampedByListPagination(t *testing.T) {
+	test := newFixture(t)
+	test.login(t)
+
+	const seededAlertTotal = 105
+	for alertIndex := 0; alertIndex < seededAlertTotal; alertIndex++ {
+		require.NoError(t, test.eventStore.CreateAlert(context.Background(), &store.Alert{
+			DeviceID:   "dev-export",
+			SessionKey: fmt.Sprintf("sess-%03d", alertIndex),
+			RuleID:     "cmd.rm_rf_root",
+			RuleName:   "高危递归强删(rm -rf 根/家目录)",
+			Severity:   "high",
+			Action:     "block",
+			Summary:    fmt.Sprintf("导出演练告警 %03d", alertIndex),
+		}))
+	}
+
+	// 列表接口按钳制后的 pageSize 返回（≤100），total 反映真实总数
+	listed := test.do(http.MethodGet, "/api/v1/alerts?page_size=100", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, listed.Code)
+	var listResponse struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(listed.Body.Bytes(), &listResponse))
+	assert.Len(t, listResponse.Items, 100)
+	assert.Equal(t, seededAlertTotal, listResponse.Total)
+
+	// 导出必须全量：105 行数据 + 1 行表头（回归 I-1 静默截断）
+	exported := test.do(http.MethodGet, "/api/v1/alerts/export", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, exported.Code)
+	exportedLineCount := strings.Count(strings.TrimRight(exported.Body.String(), "\n"), "\n") + 1
+	assert.Equal(t, seededAlertTotal+1, exportedLineCount)
+}
+
+// TestAlertsCSVFormulaPrefixNeutralized summary 以公式前缀字符开头时须被中和，防 Excel/WPS 公式注入。
+func TestAlertsCSVFormulaPrefixNeutralized(t *testing.T) {
+	exportedCSV := string(buildAlertsCSV([]store.Alert{{Summary: "=HYPERLINK(\"http://evil\",\"x\")"}}))
+	assert.Contains(t, exportedCSV, "'=HYPERLINK")
+
+	benignCSV := string(buildAlertsCSV([]store.Alert{{Summary: "普通告警摘要"}}))
+	assert.Contains(t, benignCSV, "普通告警摘要", "普通文本不应被改写")
 }

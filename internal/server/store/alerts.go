@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Alert 对应 alerts 表一行。
@@ -69,36 +71,40 @@ type AlertFilter struct {
 	PageSize int
 }
 
-// ListAlerts 按筛选条件分页返回告警（created_at 倒序），并给出满足条件的总数。
-func (store *Store) ListAlerts(ctx context.Context, filter AlertFilter) (list []Alert, totalCount int, err error) {
-	page, pageSize := normalizePage(filter.Page, filter.PageSize)
-	limit, offset := pageWindow(page, pageSize)
-
+// buildAlertWhereClause 组装 status/severity 的过滤子句与绑定参数（ListAlerts 与导出共用）。
+func buildAlertWhereClause(statusFilter string, severityFilter string) (whereClause string, queryArgs []any) {
 	clauses := []string{"true"}
-	var args []any
-	if filter.Status != "" {
-		args = append(args, filter.Status)
-		clauses = append(clauses, "status = $"+strconv.Itoa(len(args)))
+	if statusFilter != "" {
+		queryArgs = append(queryArgs, statusFilter)
+		clauses = append(clauses, "status = $"+strconv.Itoa(len(queryArgs)))
 	}
-	if filter.Severity != "" {
-		args = append(args, filter.Severity)
-		clauses = append(clauses, "severity = $"+strconv.Itoa(len(args)))
+	if severityFilter != "" {
+		queryArgs = append(queryArgs, severityFilter)
+		clauses = append(clauses, "severity = $"+strconv.Itoa(len(queryArgs)))
 	}
-	whereClause := ""
 	for index, clause := range clauses {
 		if index > 0 {
 			whereClause += " AND "
 		}
 		whereClause += clause
 	}
+	return whereClause, queryArgs
+}
+
+// ListAlerts 按筛选条件分页返回告警（created_at 倒序），并给出满足条件的总数。
+func (store *Store) ListAlerts(ctx context.Context, filter AlertFilter) (list []Alert, totalCount int, err error) {
+	page, pageSize := normalizePage(filter.Page, filter.PageSize)
+	limit, offset := pageWindow(page, pageSize)
+
+	whereClause, queryArgs := buildAlertWhereClause(filter.Status, filter.Severity)
 
 	countScanErr := store.pool.QueryRow(ctx,
-		`SELECT count(*) FROM alerts WHERE `+whereClause, args...).Scan(&totalCount)
+		`SELECT count(*) FROM alerts WHERE `+whereClause, queryArgs...).Scan(&totalCount)
 	if countScanErr != nil {
 		return nil, 0, countScanErr
 	}
 
-	listArgs := append(args, limit, offset)
+	listArgs := append(queryArgs, limit, offset)
 	limitOrdinal := "$" + strconv.Itoa(len(listArgs)-1)
 	offsetOrdinal := "$" + strconv.Itoa(len(listArgs))
 	rows, err := store.pool.Query(ctx,
@@ -109,17 +115,40 @@ func (store *Store) ListAlerts(ctx context.Context, filter AlertFilter) (list []
 	}
 	defer rows.Close()
 
-	list = make([]Alert, 0)
-	for rows.Next() {
-		var alert Alert
-		if scanErr := rows.Scan(&alert.ID, &alert.DeviceID, &alert.SessionKey, &alert.EventID,
-			&alert.RuleID, &alert.RuleName, &alert.Severity, &alert.Action, &alert.Snippet, &alert.Summary,
-			&alert.Status, &alert.CreatedAt, &alert.AcknowledgedAt); scanErr != nil {
-			return nil, 0, scanErr
-		}
-		list = append(list, alert)
+	list, scanAllErr := scanAlertRows(rows)
+	return list, totalCount, scanAllErr
+}
+
+// alertExportRowHardCap 导出场景的防御性行数上限（远超正常审计规模，仅防失控查询）。
+const alertExportRowHardCap = 100000
+
+// ListAlertsForExport 导出场景全量拉取告警：绕过列表分页钳制（normalizePage 上限 100），
+// 仅保留防御性硬上限，保证审计取证不静默截断。
+func (store *Store) ListAlertsForExport(ctx context.Context, statusFilter string, severityFilter string) ([]Alert, error) {
+	whereClause, queryArgs := buildAlertWhereClause(statusFilter, severityFilter)
+	rows, err := store.pool.Query(ctx,
+		`SELECT `+alertColumns+` FROM alerts WHERE `+whereClause+
+			` ORDER BY created_at DESC LIMIT `+strconv.Itoa(alertExportRowHardCap), queryArgs...)
+	if err != nil {
+		return nil, err
 	}
-	return list, totalCount, rows.Err()
+	defer rows.Close()
+	return scanAlertRows(rows)
+}
+
+// scanAlertRows 消费告警结果集并逐行扫描。
+func scanAlertRows(rows pgx.Rows) ([]Alert, error) {
+	alertList := make([]Alert, 0)
+	for rows.Next() {
+		var alertRow Alert
+		if scanErr := rows.Scan(&alertRow.ID, &alertRow.DeviceID, &alertRow.SessionKey, &alertRow.EventID,
+			&alertRow.RuleID, &alertRow.RuleName, &alertRow.Severity, &alertRow.Action, &alertRow.Snippet, &alertRow.Summary,
+			&alertRow.Status, &alertRow.CreatedAt, &alertRow.AcknowledgedAt); scanErr != nil {
+			return nil, scanErr
+		}
+		alertList = append(alertList, alertRow)
+	}
+	return alertList, rows.Err()
 }
 
 // CountOpenAlerts 统计未处理告警数（概览页统计卡）。

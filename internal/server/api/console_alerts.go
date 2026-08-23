@@ -12,7 +12,19 @@ import (
 	"github.com/codingway-hub/a3/internal/server/store"
 )
 
-// buildAlertsCSV 把告警列表渲染为 CSV 字节（表头 + 行，时间 RFC3339）。
+// neutralizeCSVFormulaPrefix 以 = + - @ 开头的单元格前置单引号，防止 Excel/WPS 公式注入。
+func neutralizeCSVFormulaPrefix(cellText string) string {
+	if len(cellText) == 0 {
+		return cellText
+	}
+	switch cellText[0] {
+	case '=', '+', '-', '@':
+		return "'" + cellText
+	}
+	return cellText
+}
+
+// buildAlertsCSV 把告警列表渲染为 CSV 字节（表头 + 行，时间 RFC3339）；summary 列做公式注入防护。
 func buildAlertsCSV(alertList []store.Alert) []byte {
 	csvBuffer := &bytes.Buffer{}
 	csvWriter := csv.NewWriter(csvBuffer)
@@ -28,7 +40,7 @@ func buildAlertsCSV(alertList []store.Alert) []byte {
 			alertRow.DeviceID,
 			alertRow.SessionKey,
 			alertRow.Status,
-			alertRow.Summary,
+			neutralizeCSVFormulaPrefix(alertRow.Summary),
 		})
 	}
 	csvWriter.Flush()
@@ -77,16 +89,11 @@ func (api *Router) HandleAcknowledgeAlert(routerCtx *gin.Context) {
 	}
 }
 
-// HandleAlertsExport GET /alerts/export?status=&severity= —— CSV 下载。
+// HandleAlertsExport GET /alerts/export?status=&severity= —— CSV 下载（全量，不截断）。
 func (api *Router) HandleAlertsExport(routerCtx *gin.Context) {
-	alertFilter := store.AlertFilter{
-		Status:   routerCtx.Query("status"),
-		Severity: routerCtx.Query("severity"),
-		Page:     1,
-		PageSize: 10000, // 导出场景放宽分页上限
-	}
-	alertList, _, listErr := api.eventStore.ListAlerts(routerCtx.Request.Context(), alertFilter)
-	if listErr != nil {
+	alertList, exportErr := api.eventStore.ListAlertsForExport(routerCtx.Request.Context(),
+		routerCtx.Query("status"), routerCtx.Query("severity"))
+	if exportErr != nil {
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "导出告警失败"})
 		return
 	}
