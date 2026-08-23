@@ -30,6 +30,12 @@ const router = createRouter({
           component: () => import('../views/SessionListView.vue'),
           meta: { title: '会话审计' },
         },
+        {
+          path: 'sessions/:deviceId/:sessionKey',
+          name: 'session-replay',
+          component: () => import('../views/SessionReplayView.vue'),
+          meta: { title: '会话回放' },
+        },
       ],
     },
     {
