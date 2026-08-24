@@ -1,0 +1,28 @@
+README.md
+  s_aca6c3f7b84b21::t_0a0925f59885d6 15
+  s_aca6c3f7b84b21::t_588dd7c28108bd 208-212,214-216
+  s_aca6c3f7b84b21::t_54babdf6bf9e92 74-75,78,97-99
+  s_aca6c3f7b84b21::t_ec20dc11295fdc 5
+  s_aca6c3f7b84b21::t_a00fd31303cee0 109-110
+  s_aca6c3f7b84b21::t_29e170f7d9943b 175-178,181,185-187,189
+  s_aca6c3f7b84b21::t_80f9eec0c5e687 153-154
+  s_aca6c3f7b84b21::t_f1cdf9c8c8ff70 13
+  s_aca6c3f7b84b21::t_dbf1ed909cca73 179-180
+  s_aca6c3f7b84b21::t_50f09c5029cf19 100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3e3f6cdf9b9dc7774d725820ef6437dfe7fb4d60",
+  "prompts": {},
+  "sessions": {
+    "s_aca6c3f7b84b21": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65567c21-a805-4f47-ad13-3149ffda1b09",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
