@@ -1,0 +1,31 @@
+internal/agent/core/watcher/tailer_persist_test.go
+  s_aca6c3f7b84b21::t_133274931ef4aa 95-122
+  s_aca6c3f7b84b21::t_9cb34f0ed0e208 83-87,94,123-133
+  s_aca6c3f7b84b21::t_dbb3f08678a290 92-93
+  s_aca6c3f7b84b21::t_9627286615a5ad 53-80
+  s_aca6c3f7b84b21::t_5b39483029646f 81-82,88-91
+internal/agent/core/watcher/tailer.go
+  s_aca6c3f7b84b21::t_bbf098227240f7 290
+  s_aca6c3f7b84b21::t_e503f684fa0e35 53
+  s_aca6c3f7b84b21::t_31ee6dac5ee186 47
+  s_aca6c3f7b84b21::t_10b20e86a82f5d 30-33
+  s_aca6c3f7b84b21::t_db743737e05402 135
+  s_aca6c3f7b84b21::t_3baaf096a68c81 174-176,183-186,188
+  s_aca6c3f7b84b21::t_2dbbede886c0f8 260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c7daf6247aa27269845e6e5a384c453baa957fa9",
+  "prompts": {},
+  "sessions": {
+    "s_aca6c3f7b84b21": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65567c21-a805-4f47-ad13-3149ffda1b09",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
