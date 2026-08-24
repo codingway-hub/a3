@@ -48,6 +48,10 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 停止与清理：`make compose-down`（数据保留在 docker volume `a3_pgdata`）。
 
+> 注意：PostgreSQL 容器仅在**首次初始化**空数据卷时读取 `A3_POSTGRES_PASSWORD`；
+> 之后修改 `.env` 中的口令不会作用于已初始化的卷，需进入容器执行
+> `ALTER USER a3 WITH PASSWORD '...'` 或删除卷重建。
+
 服务端环境变量（见 [deploy/.env.example](deploy/.env.example)）：
 
 | 变量 | 说明 | 默认 |

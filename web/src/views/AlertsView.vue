@@ -10,7 +10,6 @@
       </el-form-item>
       <el-form-item label="等级">
         <el-select v-model="filters.severity" placeholder="全部" clearable style="width: 160px" @change="applyFilters">
-          <el-option label="严重" value="critical" />
           <el-option label="高" value="high" />
           <el-option label="中" value="medium" />
           <el-option label="低" value="low" />
@@ -89,7 +88,7 @@ const filters = reactive({ status: 'open', severity: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 function severityLabel(severity) {
-  const labels = { critical: '严重', high: '高', medium: '中', low: '低' }
+  const labels = { high: '高', medium: '中', low: '低' }
   return labels[severity] || severity || '-'
 }
 
