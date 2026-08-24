@@ -2,7 +2,7 @@
 
 a3（AI Agent Audit）对 AI 编码智能体（当前支持 Claude Code）的工作过程做**全程留痕、风险拦截与集中审计**：
 终端侧常驻采集器把会话流解析为标准事件、在工具执行前按规则裁决高危操作，服务端集中落库并提供 Web 审计台
-（会话回放、告警中心、设备管理、导出）。
+（概览统计、会话检索与回放、告警中心、设备管理、导出）。
 
 核心能力一览：
 
@@ -10,7 +10,9 @@ a3（AI Agent Audit）对 AI 编码智能体（当前支持 Claude Code）的工
 - **高危拦截**：PreToolUse Hook 在命令执行前判定，`block` 级规则直接阻断（退出码 2）
 - **敏感信息防护**：密钥/私钥/连接串等 DLP 规则命中即拦截，命中片段脱敏后展示
 - **断网续传**：终端本地磁盘缓存（spool），网络恢复后自动续传，事件不丢
+- **出站脱敏**：会话内容、工具输入/结果在终端侧先做密钥形态二次脱敏再上报
 - **设备管理**：指纹去重注册、心跳在线状态、Token 鉴权上报
+- **告警中心**：服务端异步扫描入库事件生成告警，支持确认处置与 CSV 导出；规则启停 API 热更新生效
 
 ## 架构
 
@@ -69,10 +71,11 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 ### 模式一：单机自助注册
 
-适合个人/小团队，服务端 `A3_ALLOW_AUTO_REGISTER=true` 时开箱即用：
+适合个人/小团队。无 Token 运行 `run` 时，仅当服务端地址为**本机地址**（`127.0.0.1`/`localhost`/`::1`）
+且服务端 `A3_ALLOW_AUTO_REGISTER=true` 才会自动注册；远程服务端必须先显式登记：
 
 ```bash
-./a3-agent register --server http://a3.example.com:8080   # 注册并保存 Token 到 ~/.a3/
+./a3-agent register --server http://a3.example.com:8080   # 注册并保存 Token/设备身份到 ~/.a3/
 ./a3-agent install-hook                                   # 安装 PreToolUse Hook
 ./a3-agent run                                            # 常驻采集与上报
 ```
@@ -91,6 +94,10 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 ./a3-agent run
 ```
 
+> 注意：显式提供 Token 时要求本机已有配套设备身份文件（此前在该机器上执行过 `register`），
+> 否则启动即报错提示重新登记——避免事件因归属校验失败被整批静默丢弃。
+> 把凭据迁移到新机器时请在新机器上重新执行一次 `register`。
+
 采集器常用环境变量：
 
 | 变量 | 说明 | 默认 |
@@ -99,8 +106,8 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 | `A3_DEVICE_TOKEN` | 设备 Token | 无(需 register 或 env 提供) |
 | `A3_SPOOL_DIR` | 断网缓存目录 | `~/.a3/spool` |
 | `A3_STATE_DIR` | 身份/位点状态目录 | `~/.a3` |
-| `A3_BATCH_SIZE` | 上报批大小 | 200 |
-| `A3_FLUSH_INTERVAL` | 上报间隔 | 5s |
+| `A3_BATCH_SIZE` | 上报批大小（上限 500，超限服务端整批拒绝） | 200 |
+| `A3_FLUSH_INTERVAL` | 批量化冲刷间隔（秒） | 2s |
 | `A3_MASK_ENABLED` | 敏感片段脱敏开关 | `true` |
 | `A3_INSECURE_SKIP_TLS_VERIFY` | 跳过证书校验(自签名) | `false` |
 | `A3_LOG_LEVEL` | debug/info/warn/error | `info` |
@@ -143,7 +150,8 @@ PreToolUse 裁决、`~/.claude/settings.json` Hook 管理）。事件模型见 `
 
 ## 风险规则
 
-内置 14 条预置规则（终端 `internal/agent/plugins/claude/rules.go` 与服务端种子同源），
+内置 14 条预置规则（终端 `internal/agent/plugins/claude/rules.go` 与服务端种子同源，
+迁移时幂等同步、守护测试保证两端一致），
 类别 `dlp`(敏感信息)/`cmd`(危险命令)/`file`(敏感文件)/`git`(版本控制)，
 动作 `block`(Hook 直接阻断)/`alert`(记录并告警)：
 
@@ -164,11 +172,21 @@ PreToolUse 裁决、`~/.claude/settings.json` Hook 管理）。事件模型见 `
 | file.dotenv_access | 环境变量文件访问 | file | high | alert |
 | git.history_rewrite | Git 历史重写 | git | medium | alert |
 
+规则的两道执行链路：
+
+- **终端侧（事前）**：PreToolUse Hook 按上表全量裁决，`block` 直接拦截
+- **服务端（事后）**：事件入库后由异步扫描引擎按**启用规则**二次评估，回写风险标签并落告警
+  （`block` 命中一律落告警；`alert` 动作需 severity ≥ medium）；规则启停经控制台 API
+  `PATCH /api/v1/rules/:ruleID` 调整，保存后引擎热更新即时生效
+
 ## 隐私与脱敏
 
 - 会话内容仅在企业内网服务端落库，用于安全审计；终端到服务端走 HTTPS，设备 Token 鉴权
+- 终端出站默认**二次脱敏**：对话内容、工具结果摘要与工具输入 JSON 字符串值中的密钥形态
+  （AKIA、JWT、API Key、数据库连接串等）保留前 4 后 4 字符打码，PEM 私钥块整段替换；
+  `A3_MASK_ENABLED=false` 可关闭（不建议）
 - 规则命中的代码/命令片段默认**脱敏展示**：命中部分超过 8 字符时保留前 4 后 2、中间打码，
-  上下文窗口 ±80 字符；`A3_MASK_ENABLED=false` 可关闭（不建议）
+  上下文窗口 ±80 字符
 - Hook 阻断仅在规则命中的高风险操作上发生（退出码 2 并向 Claude Code 返回中文原因），
   其余工具调用一律放行，不影响正常开发流程
 - 采集范围限于 Claude Code 自身的会话日志目录与 Hook 输入，不扫描其他用户文件
@@ -187,4 +205,12 @@ make build-agent     # 构建采集器 bin/a3-agent
 make build-server    # 构建服务端 bin/a3-server
 make build-web       # 构建前端 web/dist
 make dev-db-up       # 本地开发 PostgreSQL(:5433)
+
+# 端到端验证（需已启动的服务端，export A3_SMOKE_BASE 与 A3_ADMIN_PASSWORD）：
+make smoke           # 服务端冒烟：注册→上报高危事件→核对会话/告警/导出
+make smoke-agent A3_SMOKE_BASE=... A3_ADMIN_PASSWORD=***   # 采集器端到端（沙箱 HOME，不碰真实 ~/.claude）
+make offline-drill A3_SMOKE_BASE=... A3_ADMIN_PASSWORD=*** # 断网续传演练：落缓存→恢复后自动补报
 ```
+
+本地起前端开发服务：`cd web && npm install && npm run dev`（Vite 默认 :5173，
+接口经 `web/vite.config.js` 代理到本机服务端）。
