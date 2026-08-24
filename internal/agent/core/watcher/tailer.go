@@ -2,6 +2,7 @@
 //
 // 实现采用轮询扫描而非 OS 事件订阅：审计采集容忍亚秒延迟，轮询天然合并高频写入
 // （等价于事件方案的写事件去抖），无需逐目录注册 watch，跨平台行为一致且零额外依赖。
+// 扫描每拍进行，偏移按脏标记惰性持久化——空闲拍只读不写（扫得勤、写得懒）。
 package watcher
 
 import (
@@ -39,6 +40,7 @@ type Tailer struct {
 
 	mu              sync.Mutex
 	lineOffsets     map[string]int64 // 文件绝对路径 → 已消费字节偏移（指向下一个未读字节）
+	offsetsDirty    bool             // 偏移自上次成功落盘后是否有变更；false 时 saveOffsets 跳过写盘
 	startupScanDone bool             // 首轮扫描是否已完成（区分「启动既有」与「运行期新建」）
 }
 
@@ -119,7 +121,14 @@ func (tailWorker *Tailer) scanOnce() {
 		if matchErr != nil || !matched {
 			return nil
 		}
-		tailWorker.consumeIncrement(currentPath)
+		sourceInfo, sourceReady := tailWorker.resolveSourceInfo(currentPath, dirEntry)
+		if !sourceReady {
+			return nil // 本拍遍历间隙文件消失或暂不可达：偏移已清理，下拍重试
+		}
+		if sourceInfo.IsDir() {
+			return nil // 非常规情形兜底（如软链指向目录）：不作为日志消费
+		}
+		tailWorker.consumeIncrement(currentPath, sourceInfo.Size())
 		return nil
 	})
 	_ = walkErr // 根目录整体消失时静默跳过本拍，下拍重试
@@ -129,16 +138,37 @@ func (tailWorker *Tailer) scanOnce() {
 	tailWorker.saveOffsets()
 }
 
-// consumeIncrement 从已记录偏移处读取单文件新增内容，回调其中全部完整行并推进偏移。
-func (tailWorker *Tailer) consumeIncrement(sourcePath string) {
-	fileStat, statErr := os.Stat(sourcePath)
-	if statErr != nil || fileStat.IsDir() {
-		tailWorker.mu.Lock()
-		delete(tailWorker.lineOffsets, sourcePath) // 文件消失：清除偏移，重建后视为新文件
-		tailWorker.mu.Unlock()
-		return
+// resolveSourceInfo 从目录遍历结果获取匹配文件的信息，替代逐文件独立 Stat：
+// 常规文件直接复用遍历所得信息（Windows 上零额外系统调用）；符号链接跟随目标取真实大小，
+// 与原 os.Stat 语义一致。取值失败（文件在遍历间隙消失等）返回 false 并清除其历史偏移。
+func (tailWorker *Tailer) resolveSourceInfo(sourcePath string, dirEntry os.DirEntry) (os.FileInfo, bool) {
+	if dirEntry.Type()&os.ModeSymlink == 0 {
+		sourceInfo, infoErr := dirEntry.Info()
+		if infoErr == nil {
+			return sourceInfo, true
+		}
+		tailWorker.markFileVanished(sourcePath)
+		return nil, false
 	}
+	resolvedInfo, statErr := os.Stat(sourcePath) // lstat 只反映链接自身，须跟随目标取真实大小
+	if statErr != nil {
+		tailWorker.markFileVanished(sourcePath)
+		return nil, false
+	}
+	return resolvedInfo, true
+}
 
+// markFileVanished 清除单文件的历史偏移（重建后视为新文件），并标记待落盘。
+func (tailWorker *Tailer) markFileVanished(sourcePath string) {
+	tailWorker.mu.Lock()
+	delete(tailWorker.lineOffsets, sourcePath)
+	tailWorker.offsetsDirty = true
+	tailWorker.mu.Unlock()
+}
+
+// consumeIncrement 从已记录偏移处读取单文件新增内容，回调其中全部完整行并推进偏移。
+// fileSize 来自本拍目录遍历（见 resolveSourceInfo），用于增量判定与截断检测。
+func (tailWorker *Tailer) consumeIncrement(sourcePath string, fileSize int64) {
 	tailWorker.mu.Lock()
 	consumedOffset, tracked := tailWorker.lineOffsets[sourcePath]
 	if !tracked {
@@ -147,19 +177,21 @@ func (tailWorker *Tailer) consumeIncrement(sourcePath string) {
 			consumedOffset = 0
 		} else {
 			// 启动时既存的文件：跳到当前 EOF，不回溯历史内容
-			consumedOffset = fileStat.Size()
+			consumedOffset = fileSize
 		}
 		tailWorker.lineOffsets[sourcePath] = consumedOffset
+		tailWorker.offsetsDirty = true
 		tailWorker.mu.Unlock()
 		return
 	}
-	if fileStat.Size() < consumedOffset {
+	if fileSize < consumedOffset {
 		consumedOffset = 0 // 截断/重建设置：防御性从头重读
 		tailWorker.lineOffsets[sourcePath] = 0
+		tailWorker.offsetsDirty = true
 	}
 	tailWorker.mu.Unlock()
 
-	if fileStat.Size() == consumedOffset {
+	if fileSize == consumedOffset {
 		return // 无新增
 	}
 
@@ -193,6 +225,7 @@ func (tailWorker *Tailer) consumeIncrement(sourcePath string) {
 
 	tailWorker.mu.Lock()
 	tailWorker.lineOffsets[sourcePath] = nextOffset
+	tailWorker.offsetsDirty = true
 	tailWorker.mu.Unlock()
 }
 
@@ -218,46 +251,72 @@ func (tailWorker *Tailer) restoreOffsets() error {
 	return nil
 }
 
-// saveOffsets 以临时文件+原子改名方式持久化偏移；仅记录仍然存在的文件。
+// saveOffsets 按脏标记惰性持久化偏移：自上次成功落盘后无任何变更时直接返回，
+// 空闲轮询拍零磁盘写入。快照仅记录仍然存在的文件（Stat 探活），避免已删路径残留进状态文件。
+// 仅当快照完整覆盖全部跟踪项时才视为同步完成；个别文件 Stat 瞬时失败则保持脏标记下拍重试。
 func (tailWorker *Tailer) saveOffsets() {
 	if tailWorker.options.StateFile == "" {
 		return
 	}
 	tailWorker.mu.Lock()
+	if !tailWorker.offsetsDirty {
+		tailWorker.mu.Unlock()
+		return // 偏移无变更：本拍跳过写盘（扫得勤、写得懒）
+	}
 	liveOffsets := make(map[string]int64, len(tailWorker.lineOffsets))
 	for trackedPath, trackedOffset := range tailWorker.lineOffsets {
 		if _, statErr := os.Stat(trackedPath); statErr == nil {
 			liveOffsets[trackedPath] = trackedOffset
 		}
 	}
+	// 先摘脏标记再落盘；若个别文件探活失败导致快照不完整则保持标记等待重试
+	tailWorker.offsetsDirty = len(liveOffsets) != len(tailWorker.lineOffsets)
 	tailWorker.mu.Unlock()
+
 	if len(liveOffsets) == 0 {
 		return // 无可持久化状态，避免空文件覆盖有效历史
 	}
 
 	snapshotBytes, marshalErr := json.Marshal(offsetSnapshot{Offsets: liveOffsets})
 	if marshalErr != nil {
+		tailWorker.markOffsetsDirtyForRetry()
 		return
 	}
+	if persistErr := tailWorker.writeSnapshotAtomic(snapshotBytes); persistErr != nil {
+		tailWorker.markOffsetsDirtyForRetry()
+	}
+}
+
+// writeSnapshotAtomic 将快照字节经临时文件+原子改名写入状态文件。
+func (tailWorker *Tailer) writeSnapshotAtomic(snapshotBytes []byte) error {
 	stateDirectory := filepath.Dir(tailWorker.options.StateFile)
 	if mkdirErr := os.MkdirAll(stateDirectory, 0o755); mkdirErr != nil {
-		return
+		return mkdirErr
 	}
 	tempFile, createErr := os.CreateTemp(stateDirectory, ".offsets-*.tmp")
 	if createErr != nil {
-		return
+		return createErr
 	}
 	tempName := tempFile.Name()
 	if _, writeErr := tempFile.Write(snapshotBytes); writeErr != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempName)
-		return
+		return writeErr
 	}
 	if closeErr := tempFile.Close(); closeErr != nil {
 		_ = os.Remove(tempName)
-		return
+		return closeErr
 	}
 	if renameErr := os.Rename(tempName, tailWorker.options.StateFile); renameErr != nil {
 		_ = os.Remove(tempName)
+		return renameErr
 	}
+	return nil
+}
+
+// markOffsetsDirtyForRetry 落盘失败后恢复脏标记，确保待持久化偏移在后续轮询拍重试不丢。
+func (tailWorker *Tailer) markOffsetsDirtyForRetry() {
+	tailWorker.mu.Lock()
+	tailWorker.offsetsDirty = true
+	tailWorker.mu.Unlock()
 }
