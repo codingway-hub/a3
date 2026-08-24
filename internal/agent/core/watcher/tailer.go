@@ -27,8 +27,10 @@ type Options struct {
 }
 
 // Tailer 目录树增量行监听器：
-// 启动时既存的文件跳到当前 EOF（不回溯历史）；运行期新建的文件从头消费（保住新建会话首批事件）；
-// 已知文件从上次偏移继续读增量；只回调完整行（末尾半行留待下次）；文件截断时防御性归零重读。
+// 启动时既存且上次已登记的文件从上次偏移续读（停机期间增量不丢）；既存但未登记的历史文件
+// 跳到当前 EOF（不回溯历史），其中 mtime 晚于上次快照落盘时刻者视为停机期间出生、从头消费
+// （保住新会话开头内容）；运行期新建的文件一律从头消费；只回调完整行（末尾半行留待下次）；
+// 文件截断时防御性归零重读。
 type Tailer struct {
 	root    string
 	options Options
@@ -42,11 +44,13 @@ type Tailer struct {
 	lineOffsets     map[string]int64 // 文件绝对路径 → 已消费字节偏移（指向下一个未读字节）
 	offsetsDirty    bool             // 偏移自上次成功落盘后是否有变更；false 时 saveOffsets 跳过写盘
 	startupScanDone bool             // 首轮扫描是否已完成（区分「启动既有」与「运行期新建」）
+	lastSavedAt     time.Time        // 上次快照落盘时刻（恢复自状态文件）；零值=无锚点，untracked 启动文件一律按历史遗留处理
 }
 
 // offsetSnapshot 偏移持久化文件的磁盘结构。
 type offsetSnapshot struct {
 	Offsets map[string]int64 `json:"offsets"`
+	SavedAt time.Time        `json:"saved_at"` // 落盘时刻；重启后据此识别停机期间新建的文件（旧格式无此字段=零值）
 }
 
 // Start 启动监听：恢复历史偏移并同步完成首轮扫描（此后新建的文件一律从头消费），
@@ -128,7 +132,7 @@ func (tailWorker *Tailer) scanOnce() {
 		if sourceInfo.IsDir() {
 			return nil // 非常规情形兜底（如软链指向目录）：不作为日志消费
 		}
-		tailWorker.consumeIncrement(currentPath, sourceInfo.Size())
+		tailWorker.consumeIncrement(currentPath, sourceInfo.Size(), sourceInfo.ModTime())
 		return nil
 	})
 	_ = walkErr // 根目录整体消失时静默跳过本拍，下拍重试
@@ -167,16 +171,21 @@ func (tailWorker *Tailer) markFileVanished(sourcePath string) {
 }
 
 // consumeIncrement 从已记录偏移处读取单文件新增内容，回调其中全部完整行并推进偏移。
-// fileSize 来自本拍目录遍历（见 resolveSourceInfo），用于增量判定与截断检测。
-func (tailWorker *Tailer) consumeIncrement(sourcePath string, fileSize int64) {
+// fileSize 与 fileModTime 来自本拍目录遍历（见 resolveSourceInfo），
+// 分别用于增量/截断判定与「停机期间出生文件」识别。
+func (tailWorker *Tailer) consumeIncrement(sourcePath string, fileSize int64, fileModTime time.Time) {
 	tailWorker.mu.Lock()
 	consumedOffset, tracked := tailWorker.lineOffsets[sourcePath]
 	if !tracked {
 		if tailWorker.startupScanDone {
 			// 运行期新建的文件：从头消费（新建会话的首批事件不能丢）
 			consumedOffset = 0
+		} else if !tailWorker.lastSavedAt.IsZero() && !fileModTime.Before(tailWorker.lastSavedAt) {
+			// 首轮扫描发现 mtime 晚于上次快照落盘时刻的未登记文件：
+			// 停机期间出生的新会话日志，从头消费而非跳 EOF
+			consumedOffset = 0
 		} else {
-			// 启动时既存的文件：跳到当前 EOF，不回溯历史内容
+			// 其余启动时既存的未登记文件：历史遗留，跳到当前 EOF 不回溯
 			consumedOffset = fileSize
 		}
 		tailWorker.lineOffsets[sourcePath] = consumedOffset
@@ -248,6 +257,7 @@ func (tailWorker *Tailer) restoreOffsets() error {
 	for trackedPath, trackedOffset := range snapshot.Offsets {
 		tailWorker.lineOffsets[trackedPath] = trackedOffset
 	}
+	tailWorker.lastSavedAt = snapshot.SavedAt // 旧格式文件无此字段为零值：无锚点，untracked 启动文件一律跳 EOF
 	return nil
 }
 
@@ -277,7 +287,7 @@ func (tailWorker *Tailer) saveOffsets() {
 		return // 无可持久化状态，避免空文件覆盖有效历史
 	}
 
-	snapshotBytes, marshalErr := json.Marshal(offsetSnapshot{Offsets: liveOffsets})
+	snapshotBytes, marshalErr := json.Marshal(offsetSnapshot{Offsets: liveOffsets, SavedAt: time.Now()})
 	if marshalErr != nil {
 		tailWorker.markOffsetsDirtyForRetry()
 		return
