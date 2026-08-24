@@ -1,0 +1,31 @@
+internal/agent/core/watcher/tailer.go
+  s_aca6c3f7b84b21::t_1939a8c8dc93f5 141-156,158-159,161-171,180,183,187,190,194
+  s_aca6c3f7b84b21::t_3aa0f8963ba7c8 5
+  s_aca6c3f7b84b21::t_6d8ddbb1c07ac1 315-321
+  s_aca6c3f7b84b21::t_c0de249aafe83c 304,308,312,314
+  s_aca6c3f7b84b21::t_7ea185ed5d204e 124-131
+  s_aca6c3f7b84b21::t_d0099a1d2e6fe6 228
+  s_aca6c3f7b84b21::t_45989f3cff0a3e 254-256,262-265,272-273,275,282,285-291,294,298
+  s_aca6c3f7b84b21::t_906b7281cae273 43
+internal/agent/core/watcher/tailer_persist_test.go
+  s_aca6c3f7b84b21::t_53b9dd2b4aa66b 42-52
+  s_aca6c3f7b84b21::t_630eb0ed7df2bc 12-19
+  s_aca6c3f7b84b21::t_042221d6510dbd 20-41
+  s_aca6c3f7b84b21::t_fc680167dcd88e 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0be4207d2fdf7493c0046c495a68674a4b898a2b",
+  "prompts": {},
+  "sessions": {
+    "s_aca6c3f7b84b21": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65567c21-a805-4f47-ad13-3149ffda1b09",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
