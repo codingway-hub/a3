@@ -1,0 +1,55 @@
+# a3 团队分布式部署变体：与单机版(deploy/docker-compose.yml)的唯一差异是
+# A3_ALLOW_AUTO_REGISTER=false —— 关闭终端自助注册，注册端点对未知设备返回 403。
+#
+# 新设备接入流程（v1 简化，无控制台预生成令牌界面）：
+#   1. 将下方 A3_ALLOW_AUTO_REGISTER 临时改为 "true"，docker compose up -d 滚动重启；
+#   2. 设备侧执行 ./a3-agent register --server https://a3.example.internal 完成登记；
+#   3. 改回 "false" 重启，仅保留已登记设备上报。
+#
+# 用法同单机版：
+#   cp deploy/.env.example deploy/.env && docker compose -f deploy/docker-compose.team.yml up -d --build
+name: a3-team
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: a3
+      POSTGRES_PASSWORD: ${A3_POSTGRES_PASSWORD:-a3-change-me}
+      POSTGRES_DB: a3
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a3 -d a3"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      A3_ADDR: ":8080"
+      A3_DATABASE_URL: postgres://a3:${A3_POSTGRES_PASSWORD:-a3-change-me}@postgres:5432/a3?sslmode=disable
+      A3_ADMIN_USER: ${A3_ADMIN_USER:-admin}
+      A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
+      A3_JWT_SECRET: ${A3_JWT_SECRET:-}
+      # 团队模式核心差异：接入流程见文件头部说明
+      A3_ALLOW_AUTO_REGISTER: "false"
+    ports:
+      - "${A3_HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  pgdata:
