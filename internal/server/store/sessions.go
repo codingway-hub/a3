@@ -21,6 +21,7 @@ type Session struct {
 	EndedAt    time.Time
 	EventCount int
 	RiskCount  int
+	Hostname   string // 关联设备主机名(列表查询 LEFT JOIN devices；设备已删除时为空串)
 }
 
 // SessionUpdate 描述一批事件到达后的会话聚合增量。
@@ -64,6 +65,7 @@ type SessionFilter struct {
 }
 
 // buildSessionWhere 依据过滤条件拼装 WHERE 子句与对应参数（$N 序号与参数追加顺序一致）。
+// 列名以 s. 限定：列表查询 LEFT JOIN devices 后 device_id 等列存在歧义。
 func buildSessionWhere(filter SessionFilter) (whereClause string, args []any) {
 	clauses := []string{"true"}
 	appendValue := func(value any) string {
@@ -72,20 +74,20 @@ func buildSessionWhere(filter SessionFilter) (whereClause string, args []any) {
 	}
 	if filter.Keyword != "" {
 		keywordPattern := likePatternContains(filter.Keyword)
-		clauses = append(clauses, fmt.Sprintf("(title ILIKE %s OR session_key ILIKE %s)",
+		clauses = append(clauses, fmt.Sprintf("(s.title ILIKE %s OR s.session_key ILIKE %s)",
 			appendValue(keywordPattern), appendValue(keywordPattern)))
 	}
 	if filter.DeviceID != "" {
-		clauses = append(clauses, "device_id = "+appendValue(filter.DeviceID))
+		clauses = append(clauses, "s.device_id = "+appendValue(filter.DeviceID))
 	}
 	if filter.RiskOnly {
-		clauses = append(clauses, "risk_count > 0")
+		clauses = append(clauses, "s.risk_count > 0")
 	}
 	if filter.StartedFrom != nil {
-		clauses = append(clauses, "started_at >= "+appendValue(*filter.StartedFrom))
+		clauses = append(clauses, "s.started_at >= "+appendValue(*filter.StartedFrom))
 	}
 	if filter.StartedTo != nil {
-		clauses = append(clauses, "started_at <= "+appendValue(*filter.StartedTo))
+		clauses = append(clauses, "s.started_at <= "+appendValue(*filter.StartedTo))
 	}
 	whereClause = ""
 	for _, clause := range clauses {
@@ -105,7 +107,7 @@ func (store *Store) ListSessions(ctx context.Context, filter SessionFilter) (lis
 	whereClause, args := buildSessionWhere(filter)
 
 	countScanErr := store.pool.QueryRow(ctx,
-		`SELECT count(*) FROM sessions WHERE `+whereClause, args...).Scan(&totalCount)
+		`SELECT count(*) FROM sessions AS s WHERE `+whereClause, args...).Scan(&totalCount)
 	if countScanErr != nil {
 		return nil, 0, countScanErr
 	}
@@ -114,8 +116,11 @@ func (store *Store) ListSessions(ctx context.Context, filter SessionFilter) (lis
 	limitOrdinal := "$" + strconv.Itoa(len(listArgs)-1)
 	offsetOrdinal := "$" + strconv.Itoa(len(listArgs))
 	rows, err := store.pool.Query(ctx,
-		`SELECT `+sessionColumns+` FROM sessions WHERE `+whereClause+
-			` ORDER BY started_at DESC LIMIT `+limitOrdinal+` OFFSET `+offsetOrdinal, listArgs...)
+		`SELECT s.id, s.device_id, s.agent_type, s.session_key, s.title, s.started_at, s.ended_at,
+		        s.event_count, s.risk_count, COALESCE(d.hostname, '')
+		 FROM sessions AS s LEFT JOIN devices AS d ON d.device_id = s.device_id
+		 WHERE `+whereClause+
+			` ORDER BY s.started_at DESC LIMIT `+limitOrdinal+` OFFSET `+offsetOrdinal, listArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -125,7 +130,8 @@ func (store *Store) ListSessions(ctx context.Context, filter SessionFilter) (lis
 	for rows.Next() {
 		var session Session
 		if scanErr := rows.Scan(&session.ID, &session.DeviceID, &session.AgentType, &session.SessionKey,
-			&session.Title, &session.StartedAt, &session.EndedAt, &session.EventCount, &session.RiskCount); scanErr != nil {
+			&session.Title, &session.StartedAt, &session.EndedAt, &session.EventCount, &session.RiskCount,
+			&session.Hostname); scanErr != nil {
 			return nil, 0, scanErr
 		}
 		list = append(list, session)

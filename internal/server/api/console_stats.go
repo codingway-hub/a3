@@ -12,7 +12,9 @@ import (
 func (api *Router) HandleStatsOverview(routerCtx *gin.Context) {
 	ctx := routerCtx.Request.Context()
 
-	todayStart := time.Now().Truncate(24 * time.Hour)
+	// 今日边界按服务器本地时区零点（Truncate 只能取 UTC 午夜，东八区上午会错算成 8 点以来）
+	nowTime := time.Now()
+	todayStart := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), 0, 0, 0, 0, nowTime.Location())
 	todayEventCount, countErr := api.eventStore.CountEventsSince(ctx, todayStart)
 	if countErr != nil {
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "统计事件数失败"})

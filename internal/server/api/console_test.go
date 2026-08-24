@@ -167,6 +167,7 @@ func TestSessionsEndpoints(t *testing.T) {
 			SessionKey string `json:"session_key"`
 			RiskCount  int    `json:"risk_count"`
 			Title      string `json:"title"`
+			Hostname   string `json:"hostname"`
 		} `json:"items"`
 		Total int `json:"total"`
 	}
@@ -174,6 +175,7 @@ func TestSessionsEndpoints(t *testing.T) {
 	assert.Equal(t, 1, listResponse.Total)
 	assert.Equal(t, "sess-risky", listResponse.Items[0].SessionKey)
 	assert.Equal(t, "清理生产数据", listResponse.Items[0].Title)
+	assert.Equal(t, "host-dev-api-1", listResponse.Items[0].Hostname)
 
 	// 回放流
 	replay := test.do(http.MethodGet, "/api/v1/sessions/dev-api-1/sess-risky/events", "", test.jwtToken)

@@ -14,6 +14,7 @@ import (
 // sessionJSON 是会话列表/详情的对外形状（snake_case）。
 type sessionJSON struct {
 	DeviceID   string    `json:"device_id"`
+	Hostname   string    `json:"hostname"`
 	SessionKey string    `json:"session_key"`
 	AgentType  string    `json:"agent_type"`
 	Title      string    `json:"title"`
@@ -26,6 +27,7 @@ type sessionJSON struct {
 func toSessionJSON(sessionRow store.Session) sessionJSON {
 	return sessionJSON{
 		DeviceID:   sessionRow.DeviceID,
+		Hostname:   sessionRow.Hostname,
 		SessionKey: sessionRow.SessionKey,
 		AgentType:  sessionRow.AgentType,
 		Title:      sessionRow.Title,
