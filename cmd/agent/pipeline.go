@@ -171,7 +171,7 @@ func consumeLogLines(claudePlugin *claude.Plugin, sourcePath string, lines [][]b
 	}
 }
 
-// maskEventContent 对对话内容与工具结果摘要做终端侧二次脱敏。
+// maskEventContent 对对话内容、工具结果摘要与工具输入字符串值做终端侧二次脱敏。
 func maskEventContent(producedEvent *schema.Event) {
 	if producedEvent.Content != "" {
 		producedEvent.Content = masking.RedactAll(producedEvent.Content)
@@ -179,6 +179,7 @@ func maskEventContent(producedEvent *schema.Event) {
 	if producedEvent.ToolOutput != nil && producedEvent.ToolOutput.Summary != "" {
 		producedEvent.ToolOutput.Summary = masking.RedactAll(producedEvent.ToolOutput.Summary)
 	}
+	producedEvent.ToolInput = masking.RedactJSONLeaves(producedEvent.ToolInput)
 }
 
 // batchingLoop 批处理：攒批（条数或时间阈值）后上报；可重试类失败整批入 spool。

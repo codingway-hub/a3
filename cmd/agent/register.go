@@ -31,11 +31,25 @@ const (
 // 返回 (token, deviceID, error)。
 func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger *slog.Logger) (string, string, error) {
 	if agentConfig.DeviceToken != "" {
-		return agentConfig.DeviceToken, readStoredDeviceID(agentConfig.StateDir), nil
+		explicitTokenDeviceID := readStoredDeviceID(agentConfig.StateDir)
+		if explicitTokenDeviceID == "" {
+			// 有 Token 无 device-id：服务端将拒绝归属校验(400→整批丢弃)，
+			// 与其静默丢数不如启动即失败，提示补齐身份
+			return "", "", fmt.Errorf(
+				"已显式提供 Token 但缺少设备身份文件(%s)：请重新执行 a3-agent register 完成登记",
+				filepath.Join(agentConfig.StateDir, deviceIDFileName))
+		}
+		return agentConfig.DeviceToken, explicitTokenDeviceID, nil
 	}
 	storedToken := readStoredDeviceToken(agentConfig.StateDir)
 	if storedToken != "" {
-		return storedToken, readStoredDeviceID(agentConfig.StateDir), nil
+		storedIdentityDeviceID := readStoredDeviceID(agentConfig.StateDir)
+		if storedIdentityDeviceID == "" {
+			return "", "", fmt.Errorf(
+				"本地 Token 缺少配套的设备身份文件(%s)：请重新执行 a3-agent register 完成登记",
+				filepath.Join(agentConfig.StateDir, deviceIDFileName))
+		}
+		return storedToken, storedIdentityDeviceID, nil
 	}
 
 	// 无 Token：仅本地地址允许自动注册（单机模式），分布式部署要求显式 register

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codingway-hub/a3/internal/agent/core"
+	"github.com/codingway-hub/a3/internal/agent/core/masking"
 	"github.com/codingway-hub/a3/internal/agent/core/uuidx"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
@@ -83,6 +84,8 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 
 	// 仅 alert 命中：组装风险事件上报（EventID 确定性派生，重放幂等）。
 	// DeviceID 此处留空，由主循环上传前统一填充，故不做严格 Validate。
+	// 幂等键取自原始输入保证跨次执行稳定；ToolInput 出站前脱敏
+	// （hook 信封不经 run 的 maskEventContent，须在此收口；风险事件最小化原则下不设开关）。
 	if hookRequest.SessionID == "" {
 		return core.HookDecision{}, nil // 无法归属会话：仅放行不上报
 	}
@@ -94,7 +97,7 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 		OccurredAt:   claudePlugin.nowFunc().UTC(),
 		ToolName:     hookRequest.ToolName,
 		ToolCallID:   uuidx.MustNewV5(NamespaceA3HookEvent, "call|"+hookRequest.SessionID+"|"+hookRequest.ToolName+"|"+string(hookRequest.ToolInput)),
-		ToolInput:    hookRequest.ToolInput,
+		ToolInput:    masking.RedactJSONLeaves(hookRequest.ToolInput),
 		RiskTags:     matchedTags,
 		SourceMethod: schema.SourceMethodHook,
 	}

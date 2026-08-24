@@ -3,6 +3,7 @@
 package masking
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -46,4 +47,44 @@ func RedactAll(sourceText string) string {
 		maskedText = secretPattern.ReplaceAllStringFunc(maskedText, MaskSecret)
 	}
 	return maskedText
+}
+
+// RedactJSONLeaves 对 JSON 原文（如工具输入）的全部字符串叶子值应用 RedactAll，
+// 保持对象/数组结构与数值、布尔等非字符串类型不变；
+// 解析失败时原样返回（宁保原文，也不产出服务端 jsonb 拒收的非法数据）。
+func RedactJSONLeaves(rawJSON json.RawMessage) json.RawMessage {
+	if len(rawJSON) == 0 {
+		return rawJSON
+	}
+	var decodedValue any
+	if unmarshalErr := json.Unmarshal(rawJSON, &decodedValue); unmarshalErr != nil {
+		return rawJSON
+	}
+	maskedBytes, marshalErr := json.Marshal(redactJSONValue(decodedValue))
+	if marshalErr != nil {
+		return rawJSON
+	}
+	return maskedBytes
+}
+
+// redactJSONValue 递归遍历解码后的 JSON 值：字符串叶子逐个 RedactAll。
+func redactJSONValue(jsonValue any) any {
+	switch typedValue := jsonValue.(type) {
+	case string:
+		return RedactAll(typedValue)
+	case map[string]any:
+		redactedMap := make(map[string]any, len(typedValue))
+		for fieldKey, fieldValue := range typedValue {
+			redactedMap[fieldKey] = redactJSONValue(fieldValue)
+		}
+		return redactedMap
+	case []any:
+		redactedSlice := make([]any, len(typedValue))
+		for elementIndex, elementValue := range typedValue {
+			redactedSlice[elementIndex] = redactJSONValue(elementValue)
+		}
+		return redactedSlice
+	default:
+		return jsonValue
+	}
 }
