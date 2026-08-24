@@ -74,7 +74,7 @@ func InstallHook(claudeDirectory string, agentBinaryPath string) (bool, error) {
 		settingsMap = map[string]json.RawMessage{}
 	}
 
-	hookCommandText := fmt.Sprintf("%s %s", agentBinaryPath, hookCommandMarker)
+	hookCommandText := quotedAgentCommand(agentBinaryPath)
 	changed, mergeErr := mergePreToolUseEntry(settingsMap, hookCommandText)
 	if mergeErr != nil || !changed {
 		return false, mergeErr
@@ -218,17 +218,30 @@ func storeBackHooks(settingsMap map[string]json.RawMessage, keptEntries []hookEn
 	return nil
 }
 
+// quotedAgentCommand 组装 Hook 命令文本：二进制路径含空白/引号时用双引号包裹
+// （macOS/Linux sh 与 Windows cmd 兼容；裸路径保持原样便于人工辨识）。
+func quotedAgentCommand(agentBinaryPath string) string {
+	if strings.ContainsAny(agentBinaryPath, " \"") {
+		return "\"" + agentBinaryPath + "\" " + hookCommandMarker
+	}
+	return agentBinaryPath + " " + hookCommandMarker
+}
+
 // isA3HookCommand 判断命令是否为 a3 写入的 Hook：
 // 含固定子命令标记，且首 token 二进制名含 a3，或与当前可执行文件路径完全一致。
+// 兼容带引号的路径形态（quotedAgentCommand 写入的带引号命令）。
 func isA3HookCommand(commandText string, currentBinaryPath string) bool {
 	trimmedText := strings.TrimSpace(commandText)
 	if !strings.HasSuffix(trimmedText, hookCommandMarker) {
 		return false
 	}
-	if currentBinaryPath != "" && trimmedText == currentBinaryPath+" "+hookCommandMarker {
+	if currentBinaryPath != "" &&
+		(trimmedText == currentBinaryPath+" "+hookCommandMarker ||
+			trimmedText == quotedAgentCommand(currentBinaryPath)) {
 		return true
 	}
 	binaryToken := strings.Fields(trimmedText)[0]
+	binaryToken = strings.Trim(binaryToken, `"`)
 	binaryBaseName := strings.TrimSuffix(filepath.Base(binaryToken), ".exe")
 	return strings.Contains(binaryBaseName, "a3")
 }
