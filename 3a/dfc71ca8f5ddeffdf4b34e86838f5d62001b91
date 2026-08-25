@@ -1,0 +1,19 @@
+.gitignore
+  s_8301e3490dd7cb::t_fa6428a19acd10 8-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3adfc71ca8f5ddeffdf4b34e86838f5d62001b91",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
