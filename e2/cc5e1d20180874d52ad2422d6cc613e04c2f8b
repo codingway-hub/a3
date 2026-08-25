@@ -1,0 +1,44 @@
+internal/server/store/events.go
+  s_8301e3490dd7cb::t_cb0a608a556081 64-73,75-84,86
+internal/server/alert/service.go
+  s_8301e3490dd7cb::t_f98289db754c72 76
+  s_8301e3490dd7cb::t_2d4b3dfae67f92 78,151-153,157,165,170,180,183-195,197-201
+  s_8301e3490dd7cb::t_44f90d0e5a7346 2,11,18-25
+  s_8301e3490dd7cb::t_3ec8eec2beba78 77
+  s_8301e3490dd7cb::t_1901f99f7f5cf1 100
+  s_8301e3490dd7cb::t_f6bbac8485a6bd 81-95
+  s_8301e3490dd7cb::t_7c496e364bcbd9 48-49,58-61,63-65,70-71,75
+  s_8301e3490dd7cb::t_71ccac112d7f33 79-80
+internal/server/store/events_test.go
+  s_8301e3490dd7cb::t_65b610a62b5735 136
+  s_8301e3490dd7cb::t_9e02283cb3fbed 137
+  s_8301e3490dd7cb::t_531d753d272d30 82,84,96-123,128-132,134-135,138-178
+internal/server/store/scan.go
+  s_8301e3490dd7cb::t_e2785424cb9a38 1-67,69-82
+  s_8301e3490dd7cb::t_b26219039e4bf3 68
+migrations/0004_events_scanned_at.up.sql
+  s_8301e3490dd7cb::t_9c222c8a8953a8 1-15
+internal/server/alert/service_test.go
+  s_8301e3490dd7cb::t_71dc4ad57df8c8 172-175
+  s_8301e3490dd7cb::t_d2e4a978a68097 158-171,176-182,186-187,203
+  s_8301e3490dd7cb::t_648a77e350e8a5 183-185
+  s_8301e3490dd7cb::t_70b156c1765d24 188-202
+migrations/0004_events_scanned_at.down.sql
+  s_8301e3490dd7cb::t_7964e6f264bb8a 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "e2cc5e1d20180874d52ad2422d6cc613e04c2f8b",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
