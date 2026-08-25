@@ -5,3 +5,8 @@ node_modules/
 *.log
 .env
 web/dist/
+
+# Go 构建产物
+/agent
+/agentd
+/server
