@@ -1,0 +1,38 @@
+internal/agent/core/spool/spool_test.go
+  s_8301e3490dd7cb::t_bacda5fe79d01b 111-138,140-143
+  s_8301e3490dd7cb::t_0cfce1707dcd25 62
+  s_8301e3490dd7cb::t_8263b8e7ea9441 57
+  s_8301e3490dd7cb::t_62c5b8ad06a500 85,87-88
+  s_8301e3490dd7cb::t_3f896935ae7665 27,29-30
+  s_8301e3490dd7cb::t_10f5431db2d182 50,52-53,59-60,64-65
+  s_8301e3490dd7cb::t_cb15cc5d7d7040 139
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_32db8d0fceffc2 293,295,299-301,303-306
+  s_8301e3490dd7cb::t_be9a8489e9e1b7 294
+  s_8301e3490dd7cb::t_d418f0d43991a2 278,281-283
+  s_8301e3490dd7cb::t_8a02f85730fb24 250-253,260
+internal/agent/core/spool/spool.go
+  s_8301e3490dd7cb::t_6a49992619b5b2 22-23,25-29
+  s_8301e3490dd7cb::t_5b63d26b7648fc 118
+  s_8301e3490dd7cb::t_66d8e1bcf039b6 41-43,55
+  s_8301e3490dd7cb::t_eee66a1f70bcb3 4-6
+  s_8301e3490dd7cb::t_16f576e2cfbce9 191-199
+  s_8301e3490dd7cb::t_7615240885657b 87-108
+  s_8301e3490dd7cb::t_7f74013907620a 119-125,127,129,131,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9b3117e799b22843b1afef59825381a20b8a170d",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
