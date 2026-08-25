@@ -21,7 +21,8 @@ import (
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
-// 事件通道容量与 spool 重放周期。
+// 事件通道容量与 spool 重放周期。通道容量只用于平滑瞬时突发：
+// 下游持续处理不过来时发送端阻塞背压，不丢事件（见 consumeLogLines）。
 const (
 	eventChannelCapacity  = 4096
 	spoolReplayEvery      = 30 * time.Second
@@ -162,11 +163,10 @@ func consumeLogLines(claudePlugin *claude.Plugin, sourcePath string, lines [][]b
 			if maskEnabled {
 				maskEventContent(&parsedEvent)
 			}
-			select {
-			case eventChannel <- parsedEvent:
-			default:
-				logger.Error("事件通道已满，丢弃事件", slog.String("event_id", parsedEvent.EventID))
-			}
+			// 阻塞式发送形成背压：下游批处理/上报积压时，tailer 暂停在当前
+			// 文件的当前 offset 上，事件零丢失。offset 在本回调返回后才推进，
+			// 阻塞期间崩溃也只会让该行重启后重新消费（至少一次，服务端幂等）。
+			eventChannel <- parsedEvent
 		}
 	}
 }
