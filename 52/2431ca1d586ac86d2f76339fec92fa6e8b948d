@@ -1,0 +1,23 @@
+internal/agent/plugins/claude/hook.go
+  s_8301e3490dd7cb::t_db533db0f905bb 61-66,80,82-83
+  s_8301e3490dd7cb::t_458285aa9c7450 86,91,93,104-105
+internal/agent/plugins/claude/hook_test.go
+  s_8301e3490dd7cb::t_667235dedf73d1 36-39
+  s_8301e3490dd7cb::t_c62611f877b310 105-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "522431ca1d586ac86d2f76339fec92fa6e8b948d",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
