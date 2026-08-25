@@ -61,17 +61,29 @@ func (store *Store) InsertEvents(ctx context.Context, rows []EventRow) (accepted
 	return acceptedFlags, tx.Commit(ctx)
 }
 
-// UpdateEventRiskTags 回写服务端规则引擎补打的风险标签（M1 规则引擎专用）。
-func (store *Store) UpdateEventRiskTags(ctx context.Context, eventID string, riskTagsJSON []byte) error {
-	commandTag, err := store.pool.Exec(ctx,
-		`UPDATE events SET risk_tags = $2 WHERE event_id = $1`, eventID, riskTagsJSON)
-	if err != nil {
-		return err
+// ListUnscannedEvents 分页列出尚未扫描的事件行（含完整 payload），按发生时间升序。
+// 供告警中心启动补扫与周期对账使用：因队列满丢弃、进程重启丢内存队列等原因
+// 错过实时扫描的事件仍完整保留在库中，从这里捞回即可补扫，保证审计无损。
+func (store *Store) ListUnscannedEvents(ctx context.Context, limit int) ([]EventRow, error) {
+	rows, queryErr := store.pool.Query(ctx,
+		`SELECT event_id, device_id, session_key, agent_type, event_type, role, occurred_at, payload, risk_tags
+		 FROM events WHERE scanned_at IS NULL
+		 ORDER BY occurred_at ASC, event_id ASC LIMIT $1`, limit)
+	if queryErr != nil {
+		return nil, queryErr
 	}
-	if commandTag.RowsAffected() == 0 {
-		return ErrNotFound
+	defer rows.Close()
+
+	unscannedEvents := make([]EventRow, 0)
+	for rows.Next() {
+		var row EventRow
+		if scanErr := rows.Scan(&row.EventID, &row.DeviceID, &row.SessionKey, &row.AgentType,
+			&row.EventType, &row.Role, &row.OccurredAt, &row.PayloadJSON, &row.RiskTagsJSON); scanErr != nil {
+			return nil, scanErr
+		}
+		unscannedEvents = append(unscannedEvents, row)
 	}
-	return nil
+	return unscannedEvents, rows.Err()
 }
 
 // ListEventsBySession 返回某设备某会话的全部事件（回放流），按发生时间升序。

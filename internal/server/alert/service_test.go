@@ -155,3 +155,49 @@ func waitFor(t *testing.T, condition func() bool) {
 	}
 	t.Fatal("等待条件超时（5s）")
 }
+
+// TestBackfillSweepRecoversUnscannedEvents 钉住无损语义：
+// 只入库、从未投递实时队列的事件（队列满丢弃/重启丢队列的等价情形），
+// 启动对账必须把它们捞回补扫——风险事件照常打标落告警。
+func TestBackfillSweepRecoversUnscannedEvents(t *testing.T) {
+	service, eventStore := newTestService(t)
+	servetest.MustSeedDevice(t, eventStore, "dev-alert-svc")
+	ctx := context.Background()
+
+	// 只入库不投递：等价于 SubmitAsync 满丢弃或进程重启丢内存队列
+	riskyEvent := mustConversationEvent("evt-backfill-1", "密钥是 AKIAIOSFODNN7EXAMPLE")
+	safeEvent := riskyEvent
+	safeEvent.EventID = "evt-backfill-2"
+	safeEvent.Content = "普通对话内容"
+	payloadRows := []store.EventRow{toEventRow(riskyEvent), toEventRow(safeEvent)}
+	_, insertErr := eventStore.InsertEvents(ctx, payloadRows)
+	require.NoError(t, insertErr)
+
+	// 启动 Run：启动即对账，未投递事件应被补扫
+	serviceCtx, cancelService := context.WithCancel(ctx)
+	defer cancelService()
+	go service.Run(serviceCtx)
+
+	waitFor(t, func() bool {
+		sessionEvents, listErr := eventStore.ListEventsBySession(ctx, "dev-alert-svc", "sess-alert-svc")
+		if listErr != nil {
+			return false
+		}
+		for _, row := range sessionEvents {
+			if row.EventID == "evt-backfill-1" && string(row.RiskTagsJSON) != "[]" {
+				return true
+			}
+		}
+		return false
+	})
+
+	// 补扫结果断言
+	sessionEvents, listErr := eventStore.ListEventsBySession(ctx, "dev-alert-svc", "sess-alert-svc")
+	require.NoError(t, listErr)
+	tagsByID := map[string]string{}
+	for _, row := range sessionEvents {
+		tagsByID[row.EventID] = string(row.RiskTagsJSON)
+	}
+	assert.Contains(t, tagsByID["evt-backfill-1"], "dlp.aws_access_key")
+	assert.JSONEq(t, `[]`, tagsByID["evt-backfill-2"])
+}

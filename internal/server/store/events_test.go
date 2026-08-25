@@ -79,9 +79,9 @@ func TestListEventsBySessionOrderedAndIsolated(t *testing.T) {
 	assert.Equal(t, "evt-b", sessionEvents[1].EventID)
 }
 
-func TestUpdateEventRiskTags(t *testing.T) {
+func TestApplyScanOutcomeAtomicAndOnceOnly(t *testing.T) {
 	testPool := newTestPool(t)
-	resetTablesForTest(t, testPool, "events", "devices")
+	resetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices")
 	eventStore := NewStore(testPool)
 	ctx := context.Background()
 	mustSeedDevice(t, eventStore, "dev-ev-3")
@@ -93,16 +93,89 @@ func TestUpdateEventRiskTags(t *testing.T) {
 	}})
 	require.NoError(t, insertErr)
 
-	updatedTags := []byte(`[{"code":"cmd.git_force_push","severity":"high"}]`)
-	require.NoError(t, eventStore.UpdateEventRiskTags(ctx, "evt-tag-1", updatedTags))
+	outcomeAlerts := []*Alert{{
+		DeviceID: "dev-ev-3", SessionKey: "sess-t", EventID: "evt-tag-1",
+		RuleID: "dlp.jwt", RuleName: "JWT 令牌泄露", Severity: "high", Action: "block",
+	}}
+	applied, applyErr := eventStore.ApplyScanOutcome(ctx, ScanOutcome{
+		EventID:      "evt-tag-1",
+		RiskTagsJSON: []byte(`[{"code":"dlp.jwt","severity":"high"}]`),
+		Alerts:       outcomeAlerts,
+		SessionUpdate: SessionUpdate{
+			DeviceID: "dev-ev-3", SessionKey: "sess-t", AgentType: "claude-code",
+			LastOccurredAt: time.Now().UTC(), RiskCountDelta: 1,
+		},
+	})
+	require.NoError(t, applyErr)
+	assert.True(t, applied)
+
+	// 重复应用（模拟实时链路与补扫竞速）：整体放弃，告警不翻倍
+	reapplied, reapplyErr := eventStore.ApplyScanOutcome(ctx, ScanOutcome{
+		EventID:      "evt-tag-1",
+		RiskTagsJSON: []byte(`[{"code":"dlp.jwt","severity":"high"}]`),
+		Alerts:       outcomeAlerts,
+		SessionUpdate: SessionUpdate{
+			DeviceID: "dev-ev-3", SessionKey: "sess-t", AgentType: "claude-code",
+			LastOccurredAt: time.Now().UTC(), RiskCountDelta: 1,
+		},
+	})
+	require.NoError(t, reapplyErr)
+	assert.False(t, reapplied, "已扫描事件不应被二次应用")
 
 	sessionEvents, listErr := eventStore.ListEventsBySession(ctx, "dev-ev-3", "sess-t")
 	require.NoError(t, listErr)
 	require.Len(t, sessionEvents, 1)
-	assert.JSONEq(t, string(updatedTags), string(sessionEvents[0].RiskTagsJSON))
+	assert.Contains(t, string(sessionEvents[0].RiskTagsJSON), "dlp.jwt")
 
-	updateErr := eventStore.UpdateEventRiskTags(ctx, "evt-missing", updatedTags)
-	assert.ErrorIs(t, updateErr, ErrNotFound)
+	fetchedSession, fetchErr := eventStore.GetSession(ctx, "dev-ev-3", "sess-t")
+	require.NoError(t, fetchErr)
+	assert.Equal(t, 1, fetchedSession.RiskCount, "竞速失败方不得重复累计风险计数")
+
+	alertList, alertTotal, listErr := eventStore.ListAlerts(ctx, AlertFilter{})
+	require.NoError(t, listErr)
+	assert.Equal(t, 1, alertTotal, "竞速失败方不得重复落告警")
+	_ = alertList
+}
+
+func TestListUnscannedEventsOrderedAndMarkedAfterScan(t *testing.T) {
+	testPool := newTestPool(t)
+	resetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices")
+	eventStore := NewStore(testPool)
+	ctx := context.Background()
+	mustSeedDevice(t, eventStore, "dev-ev-5")
+
+	baseTime := time.Date(2026, 8, 22, 11, 0, 0, 0, time.UTC)
+	_, insertErr := eventStore.InsertEvents(ctx, []EventRow{
+		{EventID: "evt-u2", DeviceID: "dev-ev-5", SessionKey: "sess-u", AgentType: "claude-code",
+			EventType: "tool_call", OccurredAt: baseTime.Add(time.Second),
+			PayloadJSON: []byte(`{"event_id":"evt-u2"}`), RiskTagsJSON: []byte(`[]`)},
+		{EventID: "evt-u1", DeviceID: "dev-ev-5", SessionKey: "sess-u", AgentType: "claude-code",
+			EventType: "conversation", OccurredAt: baseTime,
+			PayloadJSON: []byte(`{"event_id":"evt-u1"}`), RiskTagsJSON: []byte(`[]`)},
+	})
+	require.NoError(t, insertErr)
+
+	unscannedRows, listErr := eventStore.ListUnscannedEvents(ctx, 10)
+	require.NoError(t, listErr)
+	require.Len(t, unscannedRows, 2)
+	assert.Equal(t, []string{"evt-u1", "evt-u2"}, []string{
+		unscannedRows[0].EventID, unscannedRows[1].EventID}, "应按发生时间升序捞出未扫描事件")
+
+	// 扫描后不再出现在对账列表中
+	_, applyErr := eventStore.ApplyScanOutcome(ctx, ScanOutcome{
+		EventID:      "evt-u1",
+		RiskTagsJSON: []byte(`[]`),
+		SessionUpdate: SessionUpdate{
+			DeviceID: "dev-ev-5", SessionKey: "sess-u", AgentType: "claude-code",
+			LastOccurredAt: baseTime,
+		},
+	})
+	require.NoError(t, applyErr)
+
+	unscannedAfterScan, afterErr := eventStore.ListUnscannedEvents(ctx, 10)
+	require.NoError(t, afterErr)
+	require.Len(t, unscannedAfterScan, 1)
+	assert.Equal(t, "evt-u2", unscannedAfterScan[0].EventID)
 }
 
 func TestCountEventsSince(t *testing.T) {
