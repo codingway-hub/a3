@@ -24,9 +24,10 @@ func TestFIFOOrderAndEmptySentinel(t *testing.T) {
 	assert.Equal(t, 3, queueLength)
 
 	for _, expectedBatch := range []string{"batch-A", "batch-B", "batch-C"} {
-		batchPayload, dequeueErr := spoolQueue.Dequeue()
+		inflightBatch, dequeueErr := spoolQueue.Dequeue()
 		require.NoError(t, dequeueErr)
-		assert.Equal(t, expectedBatch, string(batchPayload))
+		assert.Equal(t, expectedBatch, string(inflightBatch.Payload))
+		require.NoError(t, inflightBatch.Commit())
 	}
 
 	_, emptyErr := spoolQueue.Dequeue()
@@ -46,19 +47,22 @@ func TestRestartContinuesConsumption(t *testing.T) {
 	restartedQueue, restartErr := New(spoolDirectory, 0)
 	require.NoError(t, restartErr)
 
-	firstPayload, firstDequeueErr := restartedQueue.Dequeue()
+	firstBatch, firstDequeueErr := restartedQueue.Dequeue()
 	require.NoError(t, firstDequeueErr)
-	assert.JSONEq(t, `{"events":["old-1"]}`, string(firstPayload))
+	assert.JSONEq(t, `{"events":["old-1"]}`, string(firstBatch.Payload))
+	require.NoError(t, firstBatch.Commit())
 
 	// 重启后新入队排在存量之后
 	require.NoError(t, restartedQueue.Enqueue([]byte(`{"events":["new-1"]}`)))
-	secondPayload, secondDequeueErr := restartedQueue.Dequeue()
+	secondBatch, secondDequeueErr := restartedQueue.Dequeue()
 	require.NoError(t, secondDequeueErr)
-	assert.JSONEq(t, `{"events":["old-2"]}`, string(secondPayload))
+	assert.JSONEq(t, `{"events":["old-2"]}`, string(secondBatch.Payload))
+	require.NoError(t, secondBatch.Commit())
 
-	thirdPayload, thirdDequeueErr := restartedQueue.Dequeue()
+	thirdBatch, thirdDequeueErr := restartedQueue.Dequeue()
 	require.NoError(t, thirdDequeueErr)
-	assert.JSONEq(t, `{"events":["new-1"]}`, string(thirdPayload))
+	assert.JSONEq(t, `{"events":["new-1"]}`, string(thirdBatch.Payload))
+	require.NoError(t, thirdBatch.Commit())
 }
 
 func TestCapacityEvictsOldestBatches(t *testing.T) {
@@ -78,9 +82,10 @@ func TestCapacityEvictsOldestBatches(t *testing.T) {
 	require.NoError(t, spoolQueue.Enqueue(largePayloadB)) // 总量 120 > 100 → 淘汰 A
 	time.Sleep(50 * time.Microsecond)
 
-	batchPayload, dequeueErr := spoolQueue.Dequeue()
+	inflightBatch, dequeueErr := spoolQueue.Dequeue()
 	require.NoError(t, dequeueErr)
-	assert.Equal(t, largePayloadB, batchPayload, "超限后最旧批次应被淘汰，仅剩最新批次")
+	assert.Equal(t, largePayloadB, inflightBatch.Payload, "超限后最旧批次应被淘汰，仅剩最新批次")
+	require.NoError(t, inflightBatch.Commit())
 
 	_, emptyErr := spoolQueue.Dequeue()
 	assert.ErrorIs(t, emptyErr, ErrEmpty)
@@ -102,4 +107,37 @@ func TestNewCleansLeftoverTempFiles(t *testing.T) {
 func TestNewValidation(t *testing.T) {
 	_, emptyErr := New("", 0)
 	assert.Error(t, emptyErr)
+}
+
+// TestUncommittedBatchRecoversOnRestart 钉住改名确认法语义：
+// 出队后未 Commit 即崩溃（模拟：持有租约不提交、直接重建 Spool），
+// 下次启动应把在途批次还原回队首原位——先于存量与后入队批次被重新消费。
+func TestUncommittedBatchRecoversOnRestart(t *testing.T) {
+	spoolDirectory := filepath.Join(t.TempDir(), "spool")
+	firstQueue, newErr := New(spoolDirectory, 0)
+	require.NoError(t, newErr)
+	require.NoError(t, firstQueue.Enqueue([]byte("batch-A")))
+	time.Sleep(50 * time.Microsecond)
+	require.NoError(t, firstQueue.Enqueue([]byte("batch-B")))
+
+	// 出队 batch-A 但不 Commit（模拟处理期间进程被杀）
+	inflightBatch, dequeueErr := firstQueue.Dequeue()
+	require.NoError(t, dequeueErr)
+	assert.Equal(t, "batch-A", string(inflightBatch.Payload))
+	flightLength, flightLengthErr := firstQueue.Len()
+	require.NoError(t, flightLengthErr)
+	assert.Equal(t, 1, flightLength, "在途批次不应计入队列长度，也不应再被 Dequeue 取到")
+
+	// 重建 Spool 模拟重启：在途批次应归位队首原位重新排队
+	restartedQueue, restartErr := New(spoolDirectory, 0)
+	require.NoError(t, restartErr)
+
+	queueLength, lengthErr := restartedQueue.Len()
+	require.NoError(t, lengthErr)
+	assert.Equal(t, 2, queueLength, "未提交的在途批次重启后应回到队列")
+
+	firstBatch, firstDequeueErr := restartedQueue.Dequeue()
+	require.NoError(t, firstDequeueErr)
+	assert.Equal(t, "batch-A", string(firstBatch.Payload))
+	require.NoError(t, firstBatch.Commit())
 }

@@ -247,14 +247,17 @@ func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 	}
 }
 
-// spoolReplayLoop 断网缓存重放：周期性取最旧批次尝试续传，失败放回队尾并退避。
+// spoolReplayLoop 断网缓存重放：周期性取最旧批次尝试续传。批次以在途租约持有，
+// 上报成功（或判定不可重试）后 Commit；可重试失败把内容重新排队到队尾再提交
+// 旧租约——两步之间崩溃至多多送一次，由服务端按 event_id 幂等兜底；
+// 若放回失败则不提交租约，在途文件留存待下次启动归位。
 func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClient *transport.Uploader,
 	deviceID string, logger *slog.Logger, doneChan chan<- struct{}) {
 	defer close(doneChan)
 
 	backoffDuration := spoolReplayEvery
 	for {
-		batchPayload, dequeueErr := spoolQueue.Dequeue()
+		inflightBatch, dequeueErr := spoolQueue.Dequeue()
 		if errors.Is(dequeueErr, spool.ErrEmpty) {
 			// 队列空：慢速空转等待新缓存
 			sleepTimer := time.NewTimer(spoolReplayEvery)
@@ -272,9 +275,12 @@ func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClien
 			continue
 		}
 
-		eventsToReplay, unmarshalErr := decodeEnvelopeFillDevice(batchPayload, deviceID)
+		eventsToReplay, unmarshalErr := decodeEnvelopeFillDevice(inflightBatch.Payload, deviceID)
 		if unmarshalErr != nil {
 			logger.Warn("缓存批次损坏(丢弃)", slog.String("error", unmarshalErr.Error()))
+			if commitErr := inflightBatch.Commit(); commitErr != nil {
+				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
+			}
 			continue
 		}
 
@@ -284,12 +290,20 @@ func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClien
 		switch {
 		case replayErr == nil:
 			logger.Info("本地缓存续传成功", slog.Int("accepted", replayResult.Accepted))
+			if commitErr := inflightBatch.Commit(); commitErr != nil {
+				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
+			}
 			backoffDuration = spoolReplayEvery
 		case isNonRetryable(replayErr):
 			logger.Error("服务端拒绝缓存批次(丢弃)", slog.String("error", replayErr.Error()))
+			if commitErr := inflightBatch.Commit(); commitErr != nil {
+				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
+			}
 		default:
-			if requeueErr := spoolQueue.Enqueue(batchPayload); requeueErr != nil {
-				logger.Error("缓存批次放回失败(丢弃)", slog.String("error", requeueErr.Error()))
+			if requeueErr := spoolQueue.Enqueue(inflightBatch.Payload); requeueErr != nil {
+				logger.Error("缓存批次放回失败(保留在途待重启回收重试)", slog.String("error", requeueErr.Error()))
+			} else if commitErr := inflightBatch.Commit(); commitErr != nil {
+				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
 			}
 			sleepTimer := time.NewTimer(backoffDuration)
 			select {
