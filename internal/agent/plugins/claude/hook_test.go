@@ -33,7 +33,10 @@ func TestEvaluateHookBlocksDangerousCommand(t *testing.T) {
 	assert.True(t, hookDecision.Block)
 	assert.Contains(t, hookDecision.Reason, "已拦截")
 	assert.Contains(t, hookDecision.Reason, "高危递归强删")
-	assert.Empty(t, hookDecision.RiskEvents, "阻断路径不产事件（file_log 路覆盖审计）")
+	require.Len(t, hookDecision.RiskEvents, 1, "命中即取证：block 也必须产出风险事件")
+	require.Len(t, hookDecision.RiskEvents[0].RiskTags, 1)
+	assert.Equal(t, "cmd.rm_rf_root", hookDecision.RiskEvents[0].RiskTags[0].Code)
+	assert.Equal(t, schema.RiskActionBlock, hookDecision.RiskEvents[0].RiskTags[0].Action)
 }
 
 func TestEvaluateHookSafeCommandPassesSilently(t *testing.T) {
@@ -99,7 +102,12 @@ func TestRunPreToolUseBlockExitTwoWithChineseReason(t *testing.T) {
 		`{"session_id":"sess-cli","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}`)
 	assert.Equal(t, HookBlockExitCode, exitCode)
 	assert.Contains(t, stderrText, "已拦截")
-	assert.Empty(t, sinkEnvelopes)
+	require.Len(t, sinkEnvelopes, 1, "阻断路径同样应产出上报信封（命中即取证）")
+
+	var blockedEnvelope core.EventEnvelope
+	require.NoError(t, json.Unmarshal(sinkEnvelopes[0], &blockedEnvelope))
+	require.Len(t, blockedEnvelope.Events, 1)
+	assert.Equal(t, schema.SourceMethodHook, blockedEnvelope.Events[0].SourceMethod)
 }
 
 func TestRunPreToolUseAlertSinksEnvelopeAndExitsZero(t *testing.T) {

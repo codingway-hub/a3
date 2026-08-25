@@ -58,9 +58,12 @@ func (claudePlugin *Plugin) ParseLine(sourcePath string, lineBytes []byte) ([]sc
 }
 
 // EvaluateHook 对 PreToolUse 输入做前置判定：
-//   - 命中任一 block 规则：阻断（Reason 为中文说明，含规则名与脱敏 snippet），不产事件；
-//   - 仅命中 alert 规则：放行，同时产出一条 hook 来源的风险事件交上行队列；
-//   - 无命中：直接放行。hook 路径不产生常规审计事件（file_log 路天然覆盖，避免双份）。
+//   - 命中任一规则均产出 hook 来源的风险事件交上行队列（命中即取证、宁重勿漏：
+//     block 是最严重的情形，更不能只依赖事后 file_log 链路补齐证据）；
+//   - 命中任一 block 规则时额外阻断（Reason 为中文说明，含规则名与脱敏 snippet），
+//     拦截与否仅决定退出码，不影响是否上报；
+//   - 无命中：直接放行。hook 事件与 file_log 路对同一次 tool_call 各有一条记录，
+//     审计场景接受少量重复以换取取证的即时与确定性；常规审计仍由 file_log 路覆盖。
 func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.HookDecision, error) {
 	matchedTags := claudePlugin.ruleMatcher.EvaluateHookInput(hookRequest.ToolInput)
 	if len(matchedTags) == 0 {
@@ -74,22 +77,20 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 			break
 		}
 	}
+	hookDecision := core.HookDecision{Block: blockTag != nil}
 	if blockTag != nil {
-		return core.HookDecision{
-			Block: true,
-			Reason: fmt.Sprintf("a3 已拦截：命令命中高危规则「%s」(%s)，命中片段：%s",
-				blockTag.Name, blockTag.Severity, blockTag.Snippet),
-		}, nil
+		hookDecision.Reason = fmt.Sprintf("a3 已拦截：命令命中高危规则「%s」(%s)，命中片段：%s",
+			blockTag.Name, blockTag.Severity, blockTag.Snippet)
 	}
 
-	// 仅 alert 命中：组装风险事件上报（EventID 确定性派生，重放幂等）。
+	// 组装风险事件上报（EventID 确定性派生，重放幂等）。
 	// DeviceID 此处留空，由主循环上传前统一填充，故不做严格 Validate。
 	// 幂等键取自原始输入保证跨次执行稳定；ToolInput 出站前脱敏
 	// （hook 信封不经 run 的 maskEventContent，须在此收口；风险事件最小化原则下不设开关）。
 	if hookRequest.SessionID == "" {
-		return core.HookDecision{}, nil // 无法归属会话：仅放行不上报
+		return hookDecision, nil // 无法归属会话：仅裁决不上报
 	}
-	riskEvent := schema.Event{
+	hookDecision.RiskEvents = []schema.Event{{
 		EventID: uuidx.MustNewV5(NamespaceA3HookEvent,
 			hookRequest.SessionID+"|"+hookRequest.ToolName+"|"+string(hookRequest.ToolInput)),
 		EventType: schema.EventTypeToolCall,
@@ -100,8 +101,8 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 		ToolInput:    masking.RedactJSONLeaves(hookRequest.ToolInput),
 		RiskTags:     matchedTags,
 		SourceMethod: schema.SourceMethodHook,
-	}
-	return core.HookDecision{RiskEvents: []schema.Event{riskEvent}}, nil
+	}}
+	return hookDecision, nil
 }
 
 // RunPreToolUse CLI 入口：从 stdin 读 PreToolUse JSON，输出裁决并向 sink 提交需上报的批次。
