@@ -17,7 +17,6 @@ import (
 	"github.com/codingway-hub/a3/internal/agent/core/spool"
 	"github.com/codingway-hub/a3/internal/agent/core/transport"
 	"github.com/codingway-hub/a3/internal/agent/core/watcher"
-	"github.com/codingway-hub/a3/internal/agent/plugins/claude"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
@@ -79,34 +78,39 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 		logger.Error("初始化断网缓存失败", slog.String("error", spoolErr.Error()))
 		return 1
 	}
-	claudePlugin, pluginErr := claude.NewPlugin(homeDir)
-	if pluginErr != nil {
-		logger.Error("加载 claude 插件失败", slog.String("error", pluginErr.Error()))
+	pluginRegistry, registryErr := buildRegistry(agentConfig.Plugins, homeDir)
+	if registryErr != nil {
+		logger.Error("装配插件失败", slog.String("error", registryErr.Error()))
 		return 1
 	}
+	enabledPlugins := enabledPluginNames(pluginRegistry)
 
 	eventChannel := make(chan schema.Event, eventChannelCapacity)
 	var activeTailers []*watcher.Tailer
-	for specIndex, watchSpec := range claudePlugin.LogWatchSpecs(homeDir) {
-		watchSpecCopy := watchSpec
-		tailWorker, startErr := watcher.Start(watchSpecCopy.RootDirectory,
-			watcher.Options{
-				MatchGlob: watchSpecCopy.MatchGlob,
-				// 每个监听规格独立偏移文件，避免多规格时快照互相覆盖
-				StateFile: filepath.Join(agentConfig.StateDir,
-					fmt.Sprintf("offsets-%02d.json", specIndex)),
-			},
-			func(sourcePath string, lines [][]byte) {
-				consumeLogLines(claudePlugin, sourcePath, lines, deviceID, agentConfig.MaskEnabled, eventChannel, logger)
-			})
-		if startErr != nil {
-			logger.Warn("监听器启动失败(跳过)", slog.String("root", watchSpecCopy.RootDirectory),
-				slog.String("error", startErr.Error()))
-			continue
+	for _, watchPlugin := range pluginRegistry.All() {
+		for specIndex, watchSpecCopy := range watchPlugin.LogWatchSpecs(homeDir) {
+			stateFile := filepath.Join(agentConfig.StateDir,
+				fmt.Sprintf("offsets-%s-%02d.json", watchPlugin.Name(), specIndex))
+			migrateLegacyOffsetsFile(logger, agentConfig.StateDir, stateFile, watchPlugin.Name(), specIndex)
+			tailWorker, startErr := watcher.Start(watchSpecCopy.RootDirectory,
+				watcher.Options{
+					MatchGlob: watchSpecCopy.MatchGlob,
+					// 状态文件按「插件名+序号」命名：不同插件的 spec 序号互不冲突，
+					// 新增插件也不会使既有插件的状态文件名漂移
+					StateFile: stateFile,
+				},
+				func(sourcePath string, lines [][]byte) {
+					consumeLogLines(watchPlugin, sourcePath, lines, deviceID, agentConfig.MaskEnabled, eventChannel, logger)
+				})
+			if startErr != nil {
+				logger.Warn("监听器启动失败(跳过)", slog.String("root", watchSpecCopy.RootDirectory),
+					slog.String("error", startErr.Error()))
+				continue
+			}
+			activeTailers = append(activeTailers, tailWorker)
+			logger.Info("正在监听会话日志", slog.String("root", watchSpecCopy.RootDirectory),
+				slog.String("glob", watchSpecCopy.MatchGlob))
 		}
-		activeTailers = append(activeTailers, tailWorker)
-		logger.Info("正在监听会话日志", slog.String("root", watchSpecCopy.RootDirectory),
-			slog.String("glob", watchSpecCopy.MatchGlob))
 	}
 	if len(activeTailers) == 0 {
 		logger.Error("没有任何可用监听器，退出")
@@ -115,7 +119,7 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 
 	batcherDone := make(chan struct{})
 	go batchingLoop(ctx, eventChannel, uploaderClient, spoolQueue, agentConfig.BatchSize,
-		agentConfig.FlushInterval, logger, batcherDone)
+		agentConfig.FlushInterval, enabledPlugins, logger, batcherDone)
 
 	replayerDone := make(chan struct{})
 	go spoolReplayLoop(ctx, spoolQueue, uploaderClient, deviceID, logger, replayerDone)
@@ -149,10 +153,10 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 }
 
 // consumeLogLines 单文件增量行回调：逐行解析 → 脱敏 → 填充设备身份 → 入事件通道。
-func consumeLogLines(claudePlugin *claude.Plugin, sourcePath string, lines [][]byte,
+func consumeLogLines(sourcePlugin core.Plugin, sourcePath string, lines [][]byte,
 	deviceID string, maskEnabled bool, eventChannel chan<- schema.Event, logger *slog.Logger) {
 	for _, lineBytes := range lines {
-		parsedEvents, parseErr := claudePlugin.ParseLine(sourcePath, lineBytes)
+		parsedEvents, parseErr := sourcePlugin.ParseLine(sourcePath, lineBytes)
 		if parseErr != nil {
 			logger.Warn("日志行解析失败(跳过)", slog.String("path", sourcePath),
 				slog.String("error", parseErr.Error()))
@@ -187,7 +191,8 @@ func maskEventContent(producedEvent *schema.Event) {
 // 上报超时派生自主运行 ctx：退出信号一到，在途重试立即失败转本地缓存，断网下也能秒级优雅退出。
 func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 	uploaderClient *transport.Uploader, spoolQueue *spool.Spool,
-	batchLimit int, flushEvery time.Duration, logger *slog.Logger, doneChan chan<- struct{}) {
+	batchLimit int, flushEvery time.Duration, enabledPlugins []string,
+	logger *slog.Logger, doneChan chan<- struct{}) {
 	defer close(doneChan)
 
 	flushTicker := time.NewTicker(flushEvery)
@@ -200,7 +205,7 @@ func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 		}
 		envelopeBytes, marshalErr := json.Marshal(core.EventEnvelope{
 			AgentVersion: agentVersion,
-			Plugins:      []string{schema.AgentTypeClaudeCode},
+			Plugins:      enabledPlugins,
 			Events:       pendingEvents,
 		})
 		if marshalErr != nil {

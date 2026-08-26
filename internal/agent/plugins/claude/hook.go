@@ -132,6 +132,7 @@ func (claudePlugin *Plugin) RunPreToolUse(stdin io.Reader, stderr io.Writer,
 	for _, riskEvent := range hookDecision.RiskEvents {
 		envelopeBytes, marshalErr := json.Marshal(core.EventEnvelope{
 			AgentVersion: agentVersion,
+			Plugins:      []string{claudePlugin.Name()},
 			Events:       []schema.Event{riskEvent},
 		})
 		if marshalErr == nil && envelopeSink != nil {

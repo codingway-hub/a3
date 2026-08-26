@@ -80,10 +80,16 @@ func loadAgentConfig(flagArguments []string) (core.Config, error) {
 	flagSet.BoolVar(&agentConfig.MaskEnabled, "mask", agentConfig.MaskEnabled, "终端侧脱敏开关")
 	flagSet.BoolVar(&agentConfig.InsecureTLS, "insecure-skip-tls-verify", agentConfig.InsecureTLS, "跳过 TLS 证书校验（仅自签名单机部署）")
 	flagSet.StringVar(&agentConfig.LogLevel, "log-level", agentConfig.LogLevel, "日志级别 debug|info|warn|error")
+	var pluginsFlagText string
+	flagSet.StringVar(&pluginsFlagText, "plugins", "", "启用的插件，逗号分隔（默认 all；env A3_PLUGINS）")
 	if flagErr := flagSet.Parse(flagArguments); flagErr != nil {
 		return core.Config{}, flagErr
 	}
 	agentConfig.FlushInterval = time.Duration(*flushSeconds) * time.Second
+	if pluginsFlagText != "" {
+		// 只做词法归一：非法名称由 Validate 统一报错（与 env 路径同一收口）
+		agentConfig.Plugins = core.ParsePluginSelection(pluginsFlagText)
+	}
 
 	if validateErr := agentConfig.Validate(); validateErr != nil {
 		return core.Config{}, validateErr
@@ -107,6 +113,7 @@ run 常用 flags:
   --token                           设备 Token（env A3_DEVICE_TOKEN）
   --insecure-skip-tls-verify        自签名场景跳过证书校验
   --log-level                       debug|info|warn|error
+  --plugins                         启用的插件，逗号分隔（默认 all；env A3_PLUGINS）
 `
 	fmt.Fprintf(output, usageText, agentVersion)
 }

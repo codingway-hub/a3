@@ -16,17 +16,21 @@ import (
 // 服务端单批事件数硬上限（与服务端 ingest 校验一致，超限会被整批拒绝）。
 const MaxBatchEvents = 500
 
+// PluginAll 插件选择的特殊值：启用全部编译内置插件（见各插件包在装配处的构造函数表）。
+const PluginAll = "all"
+
 // Config 终端采集器运行配置；CLI flag 优先级高于环境变量，环境变量高于默认值。
 type Config struct {
 	ServerURL     string        // 服务端地址（http/https）
 	DeviceToken   string        // 设备 Token（a3d_ 前缀）；空表示未注册，run 时按策略自动注册
 	SpoolDir      string        // 断网缓存队列目录
-	StateDir      string        // 状态目录（offsets.json 等断点续传状态）
+	StateDir      string        // 状态目录（offsets 等断点续传状态）
 	BatchSize     int           // 单批上报事件数上限（1~500）
 	FlushInterval time.Duration // 批量化冲刷间隔
 	MaskEnabled   bool          // 终端侧脱敏开关
 	InsecureTLS   bool          // 跳过 TLS 证书校验（仅自签名单机部署场景使用）
 	LogLevel      string        // 日志级别：debug|info|warn|error
+	Plugins       []string      // 启用的插件名列表；[all] 表示全部内置插件（默认）
 }
 
 // Default 返回基于用户主目录推导的默认配置。
@@ -42,6 +46,7 @@ func Default(homeDir string) Config {
 		MaskEnabled:   true,
 		InsecureTLS:   false,
 		LogLevel:      "info",
+		Plugins:       []string{PluginAll},
 	}
 }
 
@@ -78,6 +83,25 @@ func (config *Config) ApplyEnv(getenv func(string) string) {
 	if logLevel := getenv("A3_LOG_LEVEL"); logLevel != "" {
 		config.LogLevel = logLevel
 	}
+	if pluginsText := getenv("A3_PLUGINS"); pluginsText != "" {
+		// 只做词法归一不做语义校验：非法值原样进入 Plugins，由 Validate 启动时报错——
+		// 采集范围选择配错了应当启动即失败，而非静默回退默认值扩大采集范围
+		config.Plugins = ParsePluginSelection(pluginsText)
+	}
+}
+
+// ParsePluginSelection 把逗号分隔的插件选择文本归一化：去首尾空白、丢弃空项、转小写。
+// 合法性（名称形状、all 混用限制）由 Config.Validate 统一收口。
+func ParsePluginSelection(selectionText string) []string {
+	textParts := strings.Split(selectionText, ",")
+	selectedPlugins := make([]string, 0, len(textParts))
+	for _, textPart := range textParts {
+		normalizedPart := strings.ToLower(strings.TrimSpace(textPart))
+		if normalizedPart != "" {
+			selectedPlugins = append(selectedPlugins, normalizedPart)
+		}
+	}
+	return selectedPlugins
 }
 
 // Validate 校验配置合法性；返回描述具体问题的中文错误。
@@ -106,7 +130,37 @@ func (config Config) Validate() error {
 	default:
 		return fmt.Errorf("log_level 不合法: %q（允许值: debug/info/warn/error）", config.LogLevel)
 	}
+	if len(config.Plugins) == 0 {
+		return fmt.Errorf("plugins 选择不能为空（逗号分隔的插件名，或 %s）", PluginAll)
+	}
+	for _, pluginName := range config.Plugins {
+		switch {
+		case pluginName == PluginAll:
+			if len(config.Plugins) > 1 {
+				return fmt.Errorf("plugins=%s 不能与其他插件名混用", PluginAll)
+			}
+		case isValidPluginName(pluginName):
+		default:
+			return fmt.Errorf("plugins 含不合法的插件名 %q（允许小写字母/数字/连字符，或 %s）",
+				pluginName, PluginAll)
+		}
+	}
 	return nil
+}
+
+// isValidPluginName 插件名词法校验：仅允许小写字母、数字与连字符。
+func isValidPluginName(pluginName string) bool {
+	if pluginName == "" {
+		return false
+	}
+	for _, charRune := range pluginName {
+		isLowerLetter := charRune >= 'a' && charRune <= 'z'
+		isDigit := charRune >= '0' && charRune <= '9'
+		if !isLowerLetter && !isDigit && charRune != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // NewLogger 按配置级别构建文本格式 slog Logger（输出 stderr）。

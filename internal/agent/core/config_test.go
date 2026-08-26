@@ -100,6 +100,49 @@ func TestApplyEnvIgnoresMalformedNumbers(t *testing.T) {
 	assert.Equal(t, 2*time.Second, config.FlushInterval, "非正数间隔应保留默认值")
 }
 
+func TestPluginsSelectionAndValidation(t *testing.T) {
+	// 默认值：all（全部内置插件）
+	defaultConfig := Default("/Users/demo")
+	assert.Equal(t, []string{PluginAll}, defaultConfig.Plugins)
+	validConfig := defaultConfig
+	validConfig.ServerURL = "http://127.0.0.1:8080"
+	require.NoError(t, validConfig.Validate())
+
+	// env 归一化：trim、去空项、小写归一
+	envConfig := Default("/Users/demo")
+	envConfig.ServerURL = "http://127.0.0.1:8080"
+	envConfig.ApplyEnv(func(envName string) string {
+		if envName == "A3_PLUGINS" {
+			return " Claude-Code , codex ,"
+		}
+		return ""
+	})
+	assert.Equal(t, []string{"claude-code", "codex"}, envConfig.Plugins,
+		"应归一化为小写并丢弃空项")
+	require.NoError(t, envConfig.Validate())
+
+	// all 与具名插件混用应被拒绝
+	mixedConfig := validConfig
+	mixedConfig.Plugins = []string{PluginAll, "claude-code"}
+	mixedErr := mixedConfig.Validate()
+	require.Error(t, mixedErr)
+	assert.Contains(t, mixedErr.Error(), "不能与其他插件名混用")
+
+	// 非法名称（大写/空格/下划线）应被拒绝
+	badNameConfig := validConfig
+	badNameConfig.Plugins = []string{"Claude Code"}
+	badNameErr := badNameConfig.Validate()
+	require.Error(t, badNameErr)
+	assert.Contains(t, badNameErr.Error(), "不合法的插件名")
+
+	// 空选择应被拒绝
+	emptyConfig := validConfig
+	emptyConfig.Plugins = nil
+	emptyErr := emptyConfig.Validate()
+	require.Error(t, emptyErr)
+	assert.Contains(t, emptyErr.Error(), "plugins 选择不能为空")
+}
+
 func TestNewLoggerLevelMapping(t *testing.T) {
 	debugLogger := NewLogger(Config{LogLevel: "debug"})
 	require.NotNil(t, debugLogger)
