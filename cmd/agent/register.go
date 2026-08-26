@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -18,7 +20,7 @@ import (
 	"github.com/codingway-hub/a3/internal/agent/core"
 	"github.com/codingway-hub/a3/internal/agent/core/spool"
 	"github.com/codingway-hub/a3/internal/agent/core/transport"
-	"github.com/codingway-hub/a3/internal/agent/plugins/claude"
+	"github.com/codingway-hub/a3/pkg/schema"
 )
 
 // 设备身份持久化文件名。
@@ -130,8 +132,11 @@ func registerCommand(flagArguments []string) int {
 }
 
 // hookCommand PreToolUse Hook 入口：读 stdin 裁决；alert 风险事件直接入断网缓存队列。
+// 目标插件取自紧随子命令的首个位置参数或 --plugin 标记（缺省 claude-code，
+// 兼容一期 settings.json 的无尾参条目）；任何装配异常一律放行（Hook 场景绝不阻断用户工作流）。
 func hookCommand(flagArguments []string) int {
-	agentConfig, loadErr := loadAgentConfig(flagArguments)
+	targetPluginNames, remainingArguments := extractHookPluginTargets(flagArguments)
+	agentConfig, loadErr := loadAgentConfig(remainingArguments)
 	if loadErr != nil {
 		// Hook 场景绝不因自身配置问题阻断用户工作流：退回默认配置继续裁决，
 		// 最坏情况只是没有上报目标（风险事件仍落本地缓存，run 恢复后补报）
@@ -147,12 +152,16 @@ func hookCommand(flagArguments []string) int {
 		fmt.Fprintf(os.Stderr, "a3 hook 缓存不可用，已放行: %v\n", spoolErr)
 		return 0
 	}
-	claudePlugin, pluginErr := claude.NewPlugin(mustHomeDirOrEmpty())
-	if pluginErr != nil {
-		fmt.Fprintf(os.Stderr, "a3 hook 插件加载失败，已放行: %v\n", pluginErr)
+	pluginRegistry, registryErr := buildRegistry(targetPluginNames, mustHomeDirOrEmpty())
+	if registryErr != nil || len(pluginRegistry.All()) == 0 {
+		fmt.Fprintf(os.Stderr, "a3 hook 目标插件不可用(%v)，已放行\n", registryErr)
 		return 0
 	}
-	return claudePlugin.RunPreToolUse(os.Stdin, os.Stderr,
+	hookPlugin := pluginRegistry.All()[0]
+	if len(targetPluginNames) > 1 {
+		fmt.Fprintf(os.Stderr, "a3 hook 单进程仅裁决一个插件，使用 %s\n", hookPlugin.Name())
+	}
+	return runPreToolUseCLI(hookPlugin, os.Stdin, os.Stderr,
 		func(envelopeBytes []byte) {
 			if enqueueErr := spoolQueue.Enqueue(envelopeBytes); enqueueErr != nil {
 				fmt.Fprintf(os.Stderr, "a3 hook 风险事件缓存失败: %v\n", enqueueErr)
@@ -160,53 +169,171 @@ func hookCommand(flagArguments []string) int {
 		}, agentVersion)
 }
 
-// installHookCommand / uninstallHookCommand Hook 装卸子命令。
-func installHookCommand() int {
-	homeDir, homeErr := core.ResolveHomeDir()
-	if homeErr != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", homeErr)
-		return 1
+// runPreToolUseCLI 通用 PreToolUse CLI 流水线：stdin JSON → 插件裁决 → 信封入队 → 退出码。
+// 仅实现了 RunPreToolUse 的插件具备前置裁决能力；纯审计型插件（无该能力）恒放行。
+func runPreToolUseCLI(agentPlugin core.Plugin, stdin io.Reader, stderr io.Writer,
+	envelopeSink func(envelopeBytes []byte), versionText string) int {
+	preToolUseRunner, canRun := agentPlugin.(interface {
+		RunPreToolUse(stdin io.Reader, stderr io.Writer,
+			envelopeSink func(envelopeBytes []byte), agentVersion string) int
+	})
+	if !canRun {
+		return 0
 	}
-	claudePlugin, pluginErr := claude.NewPlugin(homeDir)
-	if pluginErr != nil {
-		fmt.Fprintf(os.Stderr, "插件加载失败: %v\n", pluginErr)
-		return 1
-	}
-	changed, configureErr := claudePlugin.ConfigureHook(homeDir, true)
-	if configureErr != nil {
-		fmt.Fprintf(os.Stderr, "安装失败: %v\n", configureErr)
-		return 1
-	}
-	if changed {
-		fmt.Println("✅ 已安装 PreToolUse Hook 到 ~/.claude/settings.json（原配置已备份）")
-	} else {
-		fmt.Println("ℹ️ Hook 已存在，无需重复安装")
-	}
-	return 0
+	return preToolUseRunner.RunPreToolUse(stdin, stderr, envelopeSink, versionText)
 }
 
-func uninstallHookCommand() int {
+// extractHookPluginTargets 解析 hook 子命令的目标插件与其余配置参数：
+//   - 规范形态：紧随子命令的首个位置参数（settings.json 由 install-hook 写入的形态）
+//   - 兼容形态：--plugin NAME / --plugin=NAME（可重复时取首个——单进程只做单次裁决）
+//
+// 其余参数原样交由配置装载；缺省 claude-code。
+func extractHookPluginTargets(subArguments []string) ([]string, []string) {
+	var targetPluginNames []string
+	remainingArguments := make([]string, 0, len(subArguments))
+	for argumentIndex := 0; argumentIndex < len(subArguments); argumentIndex++ {
+		tokenText := subArguments[argumentIndex]
+		switch {
+		case tokenText == "--plugin":
+			if argumentIndex+1 < len(subArguments) {
+				targetPluginNames = appendUniquePluginName(targetPluginNames, subArguments[argumentIndex+1])
+				argumentIndex++
+			}
+		case strings.HasPrefix(tokenText, "--plugin="):
+			targetPluginNames = appendUniquePluginName(targetPluginNames,
+				strings.TrimPrefix(tokenText, "--plugin="))
+		default:
+			if argumentIndex == 0 && !strings.HasPrefix(tokenText, "-") {
+				targetPluginNames = appendUniquePluginName(targetPluginNames, tokenText)
+			} else {
+				remainingArguments = append(remainingArguments, tokenText)
+			}
+		}
+	}
+	if len(targetPluginNames) == 0 {
+		targetPluginNames = []string{schema.AgentTypeClaudeCode}
+	}
+	return targetPluginNames, remainingArguments
+}
+
+// parseHookTargetNames 解析装卸子命令的目标插件名：可重复 --plugin 标记与位置参数混用，
+// 词法归一去重保序；装卸命令无其他 flag，未知参数直接报错。无任何目标时返回空切片。
+func parseHookTargetNames(flagArguments []string) ([]string, error) {
+	var targetNames []string
+	for argumentIndex := 0; argumentIndex < len(flagArguments); argumentIndex++ {
+		tokenText := flagArguments[argumentIndex]
+		switch {
+		case tokenText == "--plugin":
+			argumentIndex++
+			if argumentIndex >= len(flagArguments) {
+				return nil, fmt.Errorf("--plugin 缺少值")
+			}
+			targetNames = appendUniquePluginName(targetNames, flagArguments[argumentIndex])
+		case strings.HasPrefix(tokenText, "--plugin="):
+			targetNames = appendUniquePluginName(targetNames, strings.TrimPrefix(tokenText, "--plugin="))
+		case strings.HasPrefix(tokenText, "-"):
+			return nil, fmt.Errorf("未知参数 %s", tokenText)
+		default:
+			targetNames = appendUniquePluginName(targetNames, tokenText)
+		}
+	}
+	return targetNames, nil
+}
+
+// appendUniquePluginName 词法归一（trim+小写）后保序去重追加。
+func appendUniquePluginName(targetNames []string, rawName string) []string {
+	normalized := strings.ToLower(strings.TrimSpace(rawName))
+	for _, existingName := range targetNames {
+		if existingName == normalized {
+			return targetNames
+		}
+	}
+	return append(targetNames, normalized)
+}
+
+// installHookCommand 安装指定插件的前置 Hook 到对应宿主（缺省 claude-code；
+// 可重复 --plugin 或位置参数）。不支持 Hook 的插件打印提示并按成功处理（退出码不受影响）。
+func installHookCommand(flagArguments []string) int {
+	targetNames, parseErr := parseHookTargetNames(flagArguments)
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n用法: a3-agent install-hook [[--plugin] 名称]...\n", parseErr)
+		return 1
+	}
+	if len(targetNames) == 0 {
+		targetNames = []string{schema.AgentTypeClaudeCode}
+	}
 	homeDir, homeErr := core.ResolveHomeDir()
 	if homeErr != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", homeErr)
 		return 1
 	}
-	claudePlugin, pluginErr := claude.NewPlugin(homeDir)
-	if pluginErr != nil {
-		fmt.Fprintf(os.Stderr, "插件加载失败: %v\n", pluginErr)
+	exitCode := 0
+	for _, targetName := range targetNames {
+		pluginRegistry, registryErr := buildRegistry([]string{targetName}, homeDir)
+		if registryErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", registryErr)
+			exitCode = 1
+			continue
+		}
+		changed, configureErr := pluginRegistry.All()[0].ConfigureHook(homeDir, true)
+		if errors.Is(configureErr, core.ErrHookUnsupported) {
+			fmt.Printf("ℹ️ %s 不支持前置 Hook（纯审计采集，无需安装）\n", targetName)
+			continue
+		}
+		if configureErr != nil {
+			fmt.Fprintf(os.Stderr, "安装 %s 失败: %v\n", targetName, configureErr)
+			exitCode = 1
+			continue
+		}
+		if changed {
+			fmt.Printf("✅ 已安装 %s 前置 Hook 到宿主配置（原配置已备份）\n", targetName)
+		} else {
+			fmt.Printf("ℹ️ %s Hook 已存在，无需重复安装\n", targetName)
+		}
+	}
+	return exitCode
+}
+
+// uninstallHookCommand 卸载指定插件的前置 Hook；无参时清理全部内置插件的 a3 项。
+// 不支持 Hook 的插件本就无可卸载内容，静默跳过。
+func uninstallHookCommand(flagArguments []string) int {
+	targetNames, parseErr := parseHookTargetNames(flagArguments)
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n用法: a3-agent uninstall-hook [[--plugin] 名称]...\n", parseErr)
 		return 1
 	}
-	changed, configureErr := claudePlugin.ConfigureHook(homeDir, false)
-	if configureErr != nil {
-		fmt.Fprintf(os.Stderr, "卸载失败: %v\n", configureErr)
+	homeDir, homeErr := core.ResolveHomeDir()
+	if homeErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", homeErr)
 		return 1
 	}
-	if changed {
-		fmt.Println("✅ 已从 ~/.claude/settings.json 移除 a3 Hook")
-	} else {
-		fmt.Println("ℹ️ 未发现已安装的 a3 Hook")
+	if len(targetNames) == 0 {
+		targetNames = sortedBuiltinPluginNames()
 	}
-	return 0
+	exitCode := 0
+	for _, targetName := range targetNames {
+		pluginRegistry, registryErr := buildRegistry([]string{targetName}, homeDir)
+		if registryErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", registryErr)
+			exitCode = 1
+			continue
+		}
+		changed, configureErr := pluginRegistry.All()[0].ConfigureHook(homeDir, false)
+		if errors.Is(configureErr, core.ErrHookUnsupported) {
+			continue
+		}
+		if configureErr != nil {
+			fmt.Fprintf(os.Stderr, "卸载 %s 失败: %v\n", targetName, configureErr)
+			exitCode = 1
+			continue
+		}
+		if changed {
+			fmt.Printf("✅ 已移除 %s 前置 Hook\n", targetName)
+		} else {
+			fmt.Printf("ℹ️ 未发现已安装的 %s 前置 Hook\n", targetName)
+		}
+	}
+	return exitCode
 }
 
 // ---- 设备身份与指纹辅助 ----

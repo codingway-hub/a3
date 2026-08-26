@@ -3,7 +3,7 @@
 // 子命令：
 //
 //	run              常驻采集主循环（默认流水线装配）
-//	hook pretooluse  ClaudeCode PreToolUse 前置 Hook（stdin JSON → 裁决）
+//	hook pretooluse [插件]  宿主 PreToolUse 前置 Hook（stdin JSON → 裁决；缺省 claude-code）
 //	install-hook     安装 PreToolUse Hook 到 ~/.claude/settings.json
 //	uninstall-hook   卸载上述 Hook
 //	register         显式注册设备并保存 Token（分布式部署模式）
@@ -37,14 +37,14 @@ func runAgentCLI(arguments []string) int {
 		return runCommand(arguments[1:])
 	case "hook":
 		if len(arguments) < 2 || arguments[1] != "pretooluse" {
-			fmt.Fprintln(os.Stderr, "用法: a3-agent hook pretooluse")
+			fmt.Fprintln(os.Stderr, "用法: a3-agent hook pretooluse [插件名]")
 			return 1
 		}
 		return hookCommand(arguments[2:])
 	case "install-hook":
-		return installHookCommand()
+		return installHookCommand(arguments[1:])
 	case "uninstall-hook":
-		return uninstallHookCommand()
+		return uninstallHookCommand(arguments[1:])
 	case "register":
 		return registerCommand(arguments[1:])
 	case "version":
@@ -102,9 +102,9 @@ func printUsage(output *os.File) {
 
 用法:
   a3-agent run [flags]              常驻采集
-  a3-agent hook pretooluse          PreToolUse 前置 Hook（由 ClaudeCode 调用）
-  a3-agent install-hook             安装 Hook 到 ~/.claude/settings.json
-  a3-agent uninstall-hook           卸载 Hook
+  a3-agent hook pretooluse [插件]   PreToolUse 前置 Hook（由宿主调用，缺省 claude-code）
+  a3-agent install-hook [[--plugin] 插件]...   安装前置 Hook 到宿主配置（缺省 claude-code）
+  a3-agent uninstall-hook [[--plugin] 插件]... 卸载前置 Hook（无参清理全部 a3 项）
   a3-agent register --server URL    注册设备并保存 Token
   a3-agent version                  版本
 

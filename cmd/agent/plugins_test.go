@@ -59,3 +59,49 @@ func TestMigrateLegacyOffsetsFile(t *testing.T) {
 		[]byte(`{}`), 0o600))
 	migrateLegacyOffsetsFile(logger, stateDirectory, targetStateFile, "claude-code", 0)
 }
+
+func TestExtractHookPluginTargets(t *testing.T) {
+	// 规范形态：紧随子命令的首个位置参数
+	targetNames, remainingArgs := extractHookPluginTargets([]string{"codex"})
+	assert.Equal(t, []string{"codex"}, targetNames)
+	assert.Empty(t, remainingArgs)
+
+	// 缺省：claude-code（兼容一期无尾参条目）
+	targetNames, remainingArgs = extractHookPluginTargets(nil)
+	assert.Equal(t, []string{"claude-code"}, targetNames)
+
+	// --plugin 标记（=与分离两种写法），其余 flag 原样透传
+	targetNames, remainingArgs = extractHookPluginTargets(
+		[]string{"--plugin=codex", "--log-level", "debug"})
+	assert.Equal(t, []string{"codex"}, targetNames)
+	assert.Equal(t, []string{"--log-level", "debug"}, remainingArgs)
+
+	// 分离式 --plugin 值被完整消费，不会误当位置参数
+	targetNames, remainingArgs = extractHookPluginTargets([]string{"--plugin", "codex"})
+	assert.Equal(t, []string{"codex"}, targetNames)
+	assert.Empty(t, remainingArgs)
+
+	// 首参为 flag 时不再识别后续位置参数（避免把其他 flag 的值误判为插件名）
+	targetNames, remainingArgs = extractHookPluginTargets(
+		[]string{"--state-dir", "/tmp/x", "claude-code"})
+	assert.Equal(t, []string{"claude-code"}, targetNames, "缺省插件")
+	assert.Equal(t, []string{"--state-dir", "/tmp/x", "claude-code"}, remainingArgs)
+}
+
+func TestParseHookTargetNames(t *testing.T) {
+	targetNames, parseErr := parseHookTargetNames([]string{"codex", "--plugin", "Claude-Code", "--plugin=bash-x"})
+	require.NoError(t, parseErr)
+	assert.Equal(t, []string{"codex", "claude-code", "bash-x"}, targetNames,
+		"词法归一去重保序")
+
+	// 无目标 → 空切片
+	targetNames, parseErr = parseHookTargetNames(nil)
+	require.NoError(t, parseErr)
+	assert.Empty(t, targetNames)
+
+	// 未知 flag 与缺值报错
+	_, parseErr = parseHookTargetNames([]string{"--bogus"})
+	assert.Error(t, parseErr)
+	_, parseErr = parseHookTargetNames([]string{"--plugin"})
+	assert.Error(t, parseErr)
+}
