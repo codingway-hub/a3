@@ -44,3 +44,28 @@ export function exportAlertsToBlob(query = {}) {
 export function fetchDevices() {
   return apiClient.get('/devices')
 }
+
+// fetchRules 规则全集（含停用，不含已软删）
+export function fetchRules() {
+  return apiClient.get('/rules')
+}
+
+// createRule 新建自定义规则；body 形状：{id,name,category,matcher{target,patterns,path_globs},severity,action,enabled}
+export function createRule(ruleBody) {
+  return apiClient.post('/rules', ruleBody)
+}
+
+// updateRule 全量更新自定义规则内容（内置规则随版本维护，仅允许启停）
+export function updateRule(ruleId, ruleBody) {
+  return apiClient.put(`/rules/${encodeURIComponent(ruleId)}`, ruleBody)
+}
+
+// deleteRule 软删自定义规则（审计留痕，内置规则不可删）
+export function deleteRule(ruleId) {
+  return apiClient.delete(`/rules/${encodeURIComponent(ruleId)}`)
+}
+
+// patchRuleEnabled 启停规则——内置与自定义通用的唯一状态变更通道
+export function patchRuleEnabled(ruleId, enabled) {
+  return apiClient.patch(`/rules/${encodeURIComponent(ruleId)}`, { enabled })
+}

@@ -26,6 +26,10 @@
           <el-icon><Monitor /></el-icon>
           <span>设备管理</span>
         </el-menu-item>
+        <el-menu-item index="/rules">
+          <el-icon><Lock /></el-icon>
+          <span>规则管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

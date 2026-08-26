@@ -48,6 +48,12 @@ const router = createRouter({
           component: () => import('../views/DevicesView.vue'),
           meta: { title: '设备管理' },
         },
+        {
+          path: 'rules',
+          name: 'rules',
+          component: () => import('../views/RulesView.vue'),
+          meta: { title: '规则管理' },
+        },
       ],
     },
     {
