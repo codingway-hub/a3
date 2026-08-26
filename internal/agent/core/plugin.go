@@ -2,9 +2,14 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/codingway-hub/a3/pkg/schema"
 )
+
+// ErrHookUnsupported 插件不支持前置 Hook（纯审计类 Agent 无本地阻断能力）。
+// 装配层（install-hook CLI）据此给出友好提示而非按错误处理。
+var ErrHookUnsupported = errors.New("该插件不支持前置 Hook")
 
 // LogWatchSpec 插件声明的日志监听位置：Core 据此驱动文件监听引擎。
 type LogWatchSpec struct {

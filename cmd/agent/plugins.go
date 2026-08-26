@@ -10,6 +10,7 @@ import (
 
 	"github.com/codingway-hub/a3/internal/agent/core"
 	"github.com/codingway-hub/a3/internal/agent/plugins/claude"
+	"github.com/codingway-hub/a3/internal/agent/plugins/codex"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
@@ -17,6 +18,7 @@ import (
 // 新增适配 = 新增插件包 + 在此登记一行，其余装配逻辑零改动。
 var builtinPluginConstructors = map[string]func(homeDir string) (core.Plugin, error){
 	schema.AgentTypeClaudeCode: func(homeDir string) (core.Plugin, error) { return claude.NewPlugin(homeDir) },
+	schema.AgentTypeCodex:      func(homeDir string) (core.Plugin, error) { return codex.NewPlugin() },
 }
 
 // legacyOffsetsFileName 一期按纯序号命名的偏移状态文件（仅存在 claude-code 的 spec 0）。

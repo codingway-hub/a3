@@ -19,7 +19,7 @@ func newTestHome(t *testing.T) string {
 func TestBuildRegistryAllExpandsBuiltin(t *testing.T) {
 	testRegistry, buildErr := buildRegistry([]string{core.PluginAll}, newTestHome(t))
 	require.NoError(t, buildErr)
-	assert.Equal(t, []string{"claude-code"}, enabledPluginNames(testRegistry),
+	assert.Equal(t, []string{"claude-code", "codex"}, enabledPluginNames(testRegistry),
 		"all 应展开为全部内置插件（当前内置清单）")
 }
 

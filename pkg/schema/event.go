@@ -38,6 +38,9 @@ const (
 // AgentTypeClaudeCode ClaudeCode 终端代理类型标识。
 const AgentTypeClaudeCode = "claude-code"
 
+// AgentTypeCodex OpenAI Codex CLI 终端代理类型标识（纯事后审计，无前置 Hook）。
+const AgentTypeCodex = "codex"
+
 // maxSummaryBytes ToolOutput.Summary 的字节上限（4KB）。
 const maxSummaryBytes = 4096
 
