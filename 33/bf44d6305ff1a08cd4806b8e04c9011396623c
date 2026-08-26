@@ -1,0 +1,30 @@
+web/src/router/index.js
+  s_8301e3490dd7cb::t_e7943e246aeb92 51-56
+web/src/layout/MainLayout.vue
+  s_8301e3490dd7cb::t_5e7b0c0fb2d802 29-32
+web/src/views/RulesView.vue
+  s_8301e3490dd7cb::t_e6e1739eb27506 1-86
+  s_8301e3490dd7cb::t_7356681ca205fb 87-160
+  s_8301e3490dd7cb::t_a641499dee83df 217-274,276-282
+  s_8301e3490dd7cb::t_effcc22fc23b0f 275
+  s_8301e3490dd7cb::t_234dc55c6d348e 283-395
+  s_8301e3490dd7cb::t_c05b1d7ec267db 161-216
+web/src/api/console.js
+  s_8301e3490dd7cb::t_b6a1530fc94e40 47-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "33bf44d6305ff1a08cd4806b8e04c9011396623c",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
