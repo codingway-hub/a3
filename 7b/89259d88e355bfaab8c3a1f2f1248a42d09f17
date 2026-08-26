@@ -1,0 +1,49 @@
+pkg/schema/rules.go
+  s_8301e3490dd7cb::t_c0efc93b2d6c8c 1-40
+cmd/agent/rules_sync_test.go
+  s_8301e3490dd7cb::t_7b1048884b48f9 1-63
+internal/agent/plugins/claude/rules_snapshot_test.go
+  s_8301e3490dd7cb::t_4f299a562f6437 1-89
+cmd/agent/rules_sync.go
+  s_8301e3490dd7cb::t_2106ca749a0b6b 1-144
+internal/server/ingest/handler.go
+  s_8301e3490dd7cb::t_fcbd9d7bfa51f8 25,27,31,77-81,83-91
+  s_8301e3490dd7cb::t_2804109813ad7b 82
+  s_8301e3490dd7cb::t_1113f418ee491a 92
+internal/server/ingest/service.go
+  s_8301e3490dd7cb::t_fcbd9d7bfa51f8 257-293
+  s_8301e3490dd7cb::t_cdf7c11b8ba6e4 8,19
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_6f25159a0ba126 101-144
+internal/agent/plugins/claude/rules.go
+  s_8301e3490dd7cb::t_1dcf0451873f85 6,15-18,73-78,80,102-130
+  s_8301e3490dd7cb::t_0773d498639baf 131
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_e92969ffe4e421 157-160
+  s_8301e3490dd7cb::t_29c7d6d47a697e 87
+  s_8301e3490dd7cb::t_1fffe7b533c5f9 128-132
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_27b2d94a4082d0 203
+  s_8301e3490dd7cb::t_97f241d6715b32 167-202,204-209
+internal/server/ingest/handler_test.go
+  s_8301e3490dd7cb::t_55ced8cd2ddb5d 122-126
+  s_8301e3490dd7cb::t_bc04fd49fa8c9e 118-121,127-169
+internal/agent/plugins/claude/hook.go
+  s_8301e3490dd7cb::t_9f6e1610d130cc 31-32,34-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7b89259d88e355bfaab8c3a1f2f1248a42d09f17",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
