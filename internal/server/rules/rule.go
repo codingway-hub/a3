@@ -6,6 +6,7 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/codingway-hub/a3/internal/server/store"
 	"github.com/codingway-hub/a3/pkg/schema"
@@ -64,4 +65,42 @@ func FromStoreRecord(record store.RuleRecord) (Rule, error) {
 		Action:    schema.RiskAction(record.Action),
 		Enabled:   record.Enabled,
 	}, nil
+}
+
+// Validate 对规则做入库前校验（管理 API 与后续终端下发共用）：
+//   - 名称非空、severity/action 枚举合法；
+//   - matcher 形状约束与 FromStoreRecord 完全同源（target 枚举 + 模式非空）；
+//   - 正则逐条编译预检（glob 无需编译，非法 glob 在匹配期按不命中处理）。
+//
+// 校验通过不代表运行时必然命中预期内容，仅保证规则可被引擎安全加载。
+func Validate(rule Rule) error {
+	if len(strings.TrimSpace(rule.Name)) == 0 {
+		return fmt.Errorf("规则名称不能为空")
+	}
+	switch rule.Severity {
+	case schema.SeverityLow, schema.SeverityMedium, schema.SeverityHigh:
+	default:
+		return fmt.Errorf("severity 不合法: %q（允许值: low/medium/high）", rule.Severity)
+	}
+	switch rule.Action {
+	case schema.RiskActionAlert, schema.RiskActionBlock:
+	default:
+		return fmt.Errorf("action 不合法: %q（允许值: alert/block）", rule.Action)
+	}
+	matcherBytes, marshalErr := json.Marshal(ruleMatcherShape{
+		Target:    rule.Target,
+		Patterns:  rule.Patterns,
+		PathGlobs: rule.PathGlobs,
+	})
+	if marshalErr != nil {
+		return fmt.Errorf("matcher 序列化失败: %w", marshalErr)
+	}
+	parsedRule, parseErr := FromStoreRecord(store.RuleRecord{ID: rule.ID, Matcher: matcherBytes})
+	if parseErr != nil {
+		return parseErr
+	}
+	if _, compileErr := compileRule(parsedRule, ""); compileErr != nil {
+		return fmt.Errorf("正则预编译失败: %w", compileErr)
+	}
+	return nil
 }

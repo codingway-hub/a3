@@ -115,3 +115,56 @@ func TestBuiltinRulesMatchTerminalSource(t *testing.T) {
 			"规则 %s path glob 与终端不一致", terminalRule.ID)
 	}
 }
+
+// TestCustomRuleCRUDAndSoftDelete 自定义规则全生命周期：
+// 创建（含唯一键冲突）→ 更新 → builtin 守护 → 软删后对全部读路径不可见。
+func TestCustomRuleCRUDAndSoftDelete(t *testing.T) {
+	testPool := newTestPool(t)
+	ruleStore := NewStore(testPool)
+	ctx := context.Background()
+	customRuleID := "custom.test-rule"
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM rules WHERE id = $1`, customRuleID)
+	})
+
+	baselineRules, baselineErr := ruleStore.ListRules(ctx)
+	require.NoError(t, baselineErr)
+
+	newRule := &RuleRecord{
+		ID: customRuleID, Name: "测试规则", Category: "test",
+		Matcher:  []byte(`{"target":"command","patterns":["rm\\s+-rf"],"path_globs":[]}`),
+		Severity: "high", Action: "alert", Enabled: true,
+	}
+	require.NoError(t, ruleStore.CreateRule(ctx, newRule))
+	assert.False(t, newRule.CreatedAt.IsZero(), "RETURNING 应回填创建时间")
+
+	duplicateErr := ruleStore.CreateRule(ctx, &RuleRecord{
+		ID: customRuleID, Name: "重复", Matcher: []byte(`{"target":"command","patterns":["x"]}`),
+	})
+	assert.ErrorIs(t, duplicateErr, ErrAlreadyExists)
+
+	gotRule, getErr := ruleStore.GetRule(ctx, customRuleID)
+	require.NoError(t, getErr)
+	gotRule.Name = "改名后"
+	require.NoError(t, ruleStore.UpdateRule(ctx, &gotRule))
+	rereadRule, rereadErr := ruleStore.GetRule(ctx, customRuleID)
+	require.NoError(t, rereadErr)
+	assert.Equal(t, "改名后", rereadRule.Name)
+
+	// builtin 行内容不可改/不可删
+	updateBuiltinErr := ruleStore.UpdateRule(ctx, &RuleRecord{ID: "dlp.jwt", Name: "篡改"})
+	assert.ErrorIs(t, updateBuiltinErr, ErrNotFound)
+	deleteBuiltinErr := ruleStore.DeleteRule(ctx, "dlp.jwt")
+	assert.ErrorIs(t, deleteBuiltinErr, ErrNotFound)
+
+	require.NoError(t, ruleStore.DeleteRule(ctx, customRuleID))
+	_, getDeletedErr := ruleStore.GetRule(ctx, customRuleID)
+	assert.ErrorIs(t, getDeletedErr, ErrNotFound)
+	afterDeleteRules, listErr := ruleStore.ListRules(ctx)
+	require.NoError(t, listErr)
+	assert.Len(t, afterDeleteRules, len(baselineRules), "软删行不应出现在列表中")
+	reDeleteErr := ruleStore.DeleteRule(ctx, customRuleID)
+	assert.ErrorIs(t, reDeleteErr, ErrNotFound)
+	setEnabledOnDeletedErr := ruleStore.SetRuleEnabled(ctx, customRuleID, true)
+	assert.ErrorIs(t, setEnabledOnDeletedErr, ErrNotFound)
+}

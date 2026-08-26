@@ -11,11 +11,25 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ErrNotFound 表示按键查询未命中任何记录。
 var ErrNotFound = errors.New("record not found")
+
+// ErrAlreadyExists 表示唯一键冲突（如同名规则 ID 已存在）。
+var ErrAlreadyExists = errors.New("record already exists")
+
+// mapUniqueViolation 把 PostgreSQL 唯一键冲突（23505）归一为 ErrAlreadyExists，
+// 其余错误原样透传；调用层据此返回 409 而非 500。
+func mapUniqueViolation(storeErr error) error {
+	var pgError *pgconn.PgError
+	if errors.As(storeErr, &pgError) && pgError.Code == "23505" {
+		return ErrAlreadyExists
+	}
+	return storeErr
+}
 
 // likeEscaper 把 ILIKE 关键字中的通配符与转义符替换为字面量形式。
 var likeEscaper = strings.NewReplacer(

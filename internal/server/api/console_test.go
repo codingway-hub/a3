@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -309,4 +310,59 @@ func TestAlertsCSVFormulaPrefixNeutralized(t *testing.T) {
 
 	benignCSV := string(buildAlertsCSV([]store.Alert{{Summary: "普通告警摘要"}}))
 	assert.Contains(t, benignCSV, "普通告警摘要", "普通文本不应被改写")
+}
+
+// TestRulesCRUDEndpoints 规则中心管理 API 全流程：
+// 创建（含 409/400 拒绝）→ 更新 → builtin 守护 → 软删 → 列表消失。
+func TestRulesCRUDEndpoints(t *testing.T) {
+	test := newFixture(t)
+	test.login(t)
+	customRuleID := "custom.api-rule"
+	t.Cleanup(func() {
+		cleanupPool, poolErr := pgxpool.New(context.Background(), servetest.TestDatabaseURL(t))
+		if poolErr == nil {
+			defer cleanupPool.Close()
+			_, _ = cleanupPool.Exec(context.Background(), `DELETE FROM rules WHERE id = $1`, customRuleID)
+		}
+	})
+
+	createBody := `{"id":"` + customRuleID + `","name":"API 测试规则","category":"test",` +
+		`"matcher":{"target":"command","patterns":["curl .*evil"],"path_globs":[]},` +
+		`"severity":"medium","action":"alert","enabled":true}`
+	recorder := test.do(http.MethodPost, "/api/v1/rules", createBody, test.jwtToken)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+
+	duplicateRecorder := test.do(http.MethodPost, "/api/v1/rules", createBody, test.jwtToken)
+	assert.Equal(t, http.StatusConflict, duplicateRecorder.Code)
+
+	badRegexRecorder := test.do(http.MethodPost, "/api/v1/rules",
+		`{"id":"custom.bad-regex","name":"坏正则","category":"test",`+
+			`"matcher":{"target":"command","patterns":["([unclosed"],"path_globs":[]},`+
+			`"severity":"low","action":"alert","enabled":true}`, test.jwtToken)
+	assert.Equal(t, http.StatusBadRequest, badRegexRecorder.Code)
+
+	badIDRecorder := test.do(http.MethodPost, "/api/v1/rules",
+		`{"id":"Bad ID!","name":"坏ID","category":"test",`+
+			`"matcher":{"target":"command","patterns":["x"],"path_globs":[]},`+
+			`"severity":"low","action":"alert","enabled":true}`, test.jwtToken)
+	assert.Equal(t, http.StatusBadRequest, badIDRecorder.Code)
+
+	updateBody := `{"name":"改名后规则","category":"test",` +
+		`"matcher":{"target":"command","patterns":["curl .*evil"],"path_globs":[]},` +
+		`"severity":"high","action":"block","enabled":true}`
+	updateRecorder := test.do(http.MethodPut, "/api/v1/rules/"+customRuleID, updateBody, test.jwtToken)
+	require.Equal(t, http.StatusOK, updateRecorder.Code, updateRecorder.Body.String())
+	listRecorder := test.do(http.MethodGet, "/api/v1/rules", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, listRecorder.Code)
+	assert.Contains(t, listRecorder.Body.String(), "改名后规则")
+
+	putBuiltinRecorder := test.do(http.MethodPut, "/api/v1/rules/dlp.jwt", updateBody, test.jwtToken)
+	assert.Equal(t, http.StatusBadRequest, putBuiltinRecorder.Code, "builtin 内容不可改")
+	deleteBuiltinRecorder := test.do(http.MethodDelete, "/api/v1/rules/dlp.jwt", "", test.jwtToken)
+	assert.Equal(t, http.StatusBadRequest, deleteBuiltinRecorder.Code, "builtin 不可删")
+
+	deleteRecorder := test.do(http.MethodDelete, "/api/v1/rules/"+customRuleID, "", test.jwtToken)
+	require.Equal(t, http.StatusOK, deleteRecorder.Code, deleteRecorder.Body.String())
+	repeatDeleteRecorder := test.do(http.MethodDelete, "/api/v1/rules/"+customRuleID, "", test.jwtToken)
+	assert.Equal(t, http.StatusNotFound, repeatDeleteRecorder.Code, "软删后重复删除应 404")
 }

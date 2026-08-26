@@ -81,6 +81,9 @@ func (api *Router) Setup() *gin.Engine {
 		protectedGroup.GET("/alerts/export", api.HandleAlertsExport)
 		protectedGroup.GET("/devices", api.HandleListDevices)
 		protectedGroup.GET("/rules", api.HandleListRules)
+		protectedGroup.POST("/rules", api.HandleCreateRule)
+		protectedGroup.PUT("/rules/:ruleID", api.HandleUpdateRule)
+		protectedGroup.DELETE("/rules/:ruleID", api.HandleDeleteRule)
 		protectedGroup.PATCH("/rules/:ruleID", api.HandlePatchRule)
 	}
 
