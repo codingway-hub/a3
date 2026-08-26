@@ -84,6 +84,7 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 		return 1
 	}
 	enabledPlugins := enabledPluginNames(pluginRegistry)
+	uploaderClient.SetPlugins(enabledPlugins)
 
 	eventChannel := make(chan schema.Event, eventChannelCapacity)
 	var activeTailers []*watcher.Tailer
@@ -124,6 +125,11 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	replayerDone := make(chan struct{})
 	go spoolReplayLoop(ctx, spoolQueue, uploaderClient, deviceID, logger, replayerDone)
 
+	// 规则下发：常驻进程周期拉取服务端权威规则集并落本地快照；
+	// hook 短命进程只读快照、绝不联网（工具调用热路径不容网络往返）
+	rulesSyncDone := make(chan struct{})
+	go ruleSyncLoop(ctx, uploaderClient, agentConfig.StateDir, logger, rulesSyncDone)
+
 	logger.Info("a3 终端采集器已启动",
 		slog.String("server", agentConfig.ServerURL),
 		slog.Int("batch_size", agentConfig.BatchSize),
@@ -147,6 +153,10 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	select {
 	case <-replayerDone:
 	case <-cancelReplayer.Done():
+	}
+	select {
+	case <-rulesSyncDone:
+	case <-time.After(2 * time.Second):
 	}
 	logger.Info("a3 终端采集器已退出")
 	return 0

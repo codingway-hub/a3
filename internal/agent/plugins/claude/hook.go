@@ -28,9 +28,18 @@ type Plugin struct {
 	nowFunc     func() time.Time // 可注入确定性时间便于测试
 }
 
-// NewPlugin 构建插件并编译内置规则。
+// NewPlugin 构建插件并装配生效规则集（三级降级瀑布）：
+// 服务端下发快照 → 编译期内置清单 → 空集放行（上层 hook 路径对构造失败 fail-open）。
 func NewPlugin(homeDir string) (*Plugin, error) {
-	ruleMatcher, compileErr := NewRuleMatcher(homeDir)
+	activeRules, fromSnapshot := resolveActiveRules(stateDirectoryFor(homeDir))
+	if !fromSnapshot {
+		activeRules = BuiltinRules
+	}
+	ruleMatcher, compileErr := compileRuleSet(activeRules, homeDir)
+	if compileErr != nil && fromSnapshot {
+		// 快照存在但含不可编译条目：回落内置清单再试（第二级兜底）
+		ruleMatcher, compileErr = compileRuleSet(BuiltinRules, homeDir)
+	}
 	if compileErr != nil {
 		return nil, compileErr
 	}

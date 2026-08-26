@@ -164,3 +164,46 @@ func TestNewUploaderValidationAndInsecureFlag(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
+
+func TestGetDeviceRulesCarriesAuthAndParses(t *testing.T) {
+	var seenAuthorization, seenPath string
+	fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		seenAuthorization = request.Header.Get("Authorization")
+		seenPath = request.URL.Path
+		responseWriter.Write([]byte(`{"revision":"sha256:abc","rules":[{"id":"dlp.jwt","name":"JWT 令牌泄露",` +
+			`"category":"dlp","target":"any","patterns":["eyJ"],"path_globs":[],"severity":"high","action":"block"}]}`))
+	}))
+	defer fakeServer.Close()
+
+	testUploader := newTestUploader(t, fakeServer.URL)
+	rulesPayload, fetchErr := testUploader.GetDeviceRules(context.Background())
+	require.NoError(t, fetchErr)
+	assert.Equal(t, "Bearer a3d_test-token", seenAuthorization)
+	assert.Equal(t, "/api/v1/devices/rules", seenPath)
+	assert.Equal(t, "sha256:abc", rulesPayload.Revision)
+	require.Len(t, rulesPayload.Rules, 1)
+	assert.Equal(t, "dlp.jwt", rulesPayload.Rules[0].ID)
+}
+
+func TestGetDeviceRulesClassifiesFailures(t *testing.T) {
+	rejectServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer rejectServer.Close()
+	_, fetchErr := newTestUploader(t, rejectServer.URL).GetDeviceRules(context.Background())
+	var nonRetryableErr *NonRetryableError
+	require.ErrorAs(t, fetchErr, &nonRetryableErr)
+	assert.Equal(t, http.StatusUnauthorized, nonRetryableErr.StatusCode)
+
+	unavailableServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusBadGateway)
+	}))
+	defer unavailableServer.Close()
+	_, fetchErr = newTestUploader(t, unavailableServer.URL).GetDeviceRules(context.Background())
+	assert.NotErrorAs(t, fetchErr, &nonRetryableErr, "5xx 应视为可重试类错误")
+
+	tokenlessUploader, buildErr := NewUploader("http://127.0.0.1:1", "", "1.0.0", false, nil)
+	require.NoError(t, buildErr)
+	_, fetchErr = tokenlessUploader.GetDeviceRules(context.Background())
+	require.ErrorAs(t, fetchErr, &nonRetryableErr, "无 Token 直接归类不可重试")
+}

@@ -3,6 +3,7 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -11,18 +12,10 @@ import (
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
-// Rule 终端侧风险规则定义；BuiltinRules 与服务端 rules 种子为同源清单
-// （ID/名称/类别/等级/动作一致），保证两端语义对齐。新增规则须双端同步。
-type Rule struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Category  string   `json:"category"`   // dlp|cmd|file|git
-	Target    string   `json:"target"`     // any|command|path|content
-	Patterns  []string `json:"patterns"`   // 正则（target=any/command/content）
-	PathGlobs []string `json:"path_globs"` // glob（target=path，支持 ~ 前缀与裸文件名）
-	Severity  string   `json:"severity"`
-	Action    string   `json:"action"`
-}
+// Rule 终端侧风险规则定义；v2 起为共享契约 schema.RuleDefinition 的别名——
+// 内置清单、服务端种子与下发快照共用同一形状。BuiltinRules 与服务端 rules
+// 种子仍为同源清单（守护测试锁死双端一致）。
+type Rule = schema.RuleDefinition
 
 // BuiltinRules 内置预置规则（v1 共 14 条）。
 var BuiltinRules = []Rule{
@@ -77,8 +70,14 @@ type RuleMatcher struct {
 
 // NewRuleMatcher 编译内置规则构建匹配器；homeDir 用于 path 规则的 ~ 归一化。
 func NewRuleMatcher(homeDir string) (*RuleMatcher, error) {
+	return compileRuleSet(BuiltinRules, homeDir)
+}
+
+// compileRuleSet 编译任意规则清单（内置或下发快照）；任一条不合法即整体失败，
+// 由调用方决定降级路径。
+func compileRuleSet(ruleDefinitions []Rule, homeDir string) (*RuleMatcher, error) {
 	ruleMatcher := &RuleMatcher{homeDir: homeDir}
-	for _, ruleDefinition := range BuiltinRules {
+	for _, ruleDefinition := range ruleDefinitions {
 		builtRule := &compiledRule{definition: ruleDefinition, pathGlobs: ruleDefinition.PathGlobs}
 		for _, patternText := range ruleDefinition.Patterns {
 			compiledPattern, compileErr := regexp.Compile(patternText)
@@ -98,6 +97,36 @@ func NewRuleMatcher(homeDir string) (*RuleMatcher, error) {
 		ruleMatcher.compiledRules = append(ruleMatcher.compiledRules, builtRule)
 	}
 	return ruleMatcher, nil
+}
+
+// resolveActiveRules 三级降级瀑布的取数层：
+//  1. 服务端下发的规则快照可读且 version 可识别 → 使用快照（替换制：服务端
+//     权威，含显式空集——管理端停用全部规则时终端放行一切）；
+//  2. 快照缺失/损坏/版本未知 → 回落编译期内置清单（永不联网、永不为空）。
+//
+// 第 3 级（连内置都编译失败→空集放行）由调用方按错误路径兜底。
+func resolveActiveRules(stateDirectory string) ([]Rule, bool) {
+	snapshotPath := filepath.Join(stateDirectory, schema.RulesSnapshotFileName)
+	rawBytes, readErr := os.ReadFile(snapshotPath)
+	if readErr != nil {
+		return nil, false
+	}
+	var snapshot schema.RulesSnapshotFile
+	if unmarshalErr := json.Unmarshal(rawBytes, &snapshot); unmarshalErr != nil {
+		return nil, false
+	}
+	if snapshot.Version != schema.RulesSnapshotVersion {
+		return nil, false
+	}
+	return snapshot.Rules, true
+}
+
+// stateDirectoryFor 主目录推导终端状态目录（与 run 进程的 A3_STATE_DIR 约定一致）。
+func stateDirectoryFor(homeDir string) string {
+	if customStateDir := os.Getenv("A3_STATE_DIR"); customStateDir != "" {
+		return customStateDir
+	}
+	return filepath.Join(homeDir, ".a3")
 }
 
 // EvaluateHookInput 对 Hook 工具输入做全量规则判定，返回命中的风险标签（每规则至多一个）。

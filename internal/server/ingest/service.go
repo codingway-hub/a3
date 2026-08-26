@@ -5,6 +5,7 @@ package ingest
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/codingway-hub/a3/internal/server/alert"
 	"github.com/codingway-hub/a3/internal/server/auth"
+	"github.com/codingway-hub/a3/internal/server/rules"
 	"github.com/codingway-hub/a3/internal/server/store"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
@@ -251,4 +253,41 @@ func truncateRunes(text string, maxRunes int) string {
 	}
 	truncatedRunes := []rune(text)[:maxRunes]
 	return string(truncatedRunes)
+}
+
+// BuildDeviceRules 组装终端规则下发载荷：启用规则 → 终端契约形状 + 内容摘要。
+// 与告警引擎 ReloadRules 同源（ListEnabledRules + FromStoreRecord），保证
+// 「服务端扫描生效集」与「终端阻断生效集」来自同一张表的同一条查询。
+func (service *Service) BuildDeviceRules(ctx context.Context) (schema.DeviceRulesPayload, error) {
+	enabledRecords, listErr := service.eventStore.ListEnabledRules(ctx)
+	if listErr != nil {
+		return schema.DeviceRulesPayload{}, listErr
+	}
+	definitions := make([]schema.RuleDefinition, 0, len(enabledRecords))
+	for _, record := range enabledRecords {
+		rule, convertErr := rules.FromStoreRecord(record)
+		if convertErr != nil {
+			return schema.DeviceRulesPayload{}, convertErr
+		}
+		definitions = append(definitions, schema.RuleDefinition{
+			ID: rule.ID, Name: rule.Name, Category: rule.Category,
+			Target: rule.Target, Patterns: rule.Patterns, PathGlobs: rule.PathGlobs,
+			Severity: string(rule.Severity), Action: string(rule.Action),
+		})
+	}
+	return schema.DeviceRulesPayload{
+		Revision: computeRulesRevision(definitions),
+		Rules:    definitions,
+	}, nil
+}
+
+// computeRulesRevision 规则集规范序列化（SQL 已按 id 排序，结构体字段序固定）
+// 后取 sha256；任一规则内容变化都会改变摘要。
+func computeRulesRevision(ruleDefinitions []schema.RuleDefinition) string {
+	canonicalBytes, marshalErr := json.Marshal(ruleDefinitions)
+	if marshalErr != nil {
+		return "sha256:unavailable" // 仅含字符串与字符串切片，序列化不可能失败
+	}
+	digest := sha256.Sum256(canonicalBytes)
+	return "sha256:" + hex.EncodeToString(digest[:])
 }

@@ -22,11 +22,13 @@ func NewHandler(service *Service) *Handler {
 // RegisterRoutes 注册设备侧路由：
 //   - POST /api/v1/devices/register（公开，是否放行由服务端开关决定）
 //
-// 事件上报路由由装配方挂在 RequireDeviceToken 中间件之后：
+// 携 Token 路由由装配方挂在 RequireDeviceToken 中间件之后：
 //   - POST /api/v1/events/batch
+//   - GET  /api/v1/devices/rules（规则中心下发：终端常驻进程周期拉取）
 func (handler *Handler) RegisterRoutes(router gin.IRouter) {
 	router.POST("/api/v1/devices/register", handler.HandleRegister)
 	router.POST("/api/v1/events/batch", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleEventsBatch)
+	router.GET("/api/v1/devices/rules", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleDeviceRules)
 }
 
 // HandleRegister 处理设备注册；403=未开放自动注册，400=请求不合法。
@@ -71,4 +73,20 @@ func (handler *Handler) HandleEventsBatch(routerCtx *gin.Context) {
 	default:
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "事件入库失败，请整批重试"})
 	}
+}
+
+// HandleDeviceRules 下发当前启用中的规则全集（前置 RequireDeviceToken 中间件）。
+// 响应含 revision 内容摘要，终端按其做变更检测；替换制语义——该响应即终端
+// 规则集的权威来源（快照缺失时终端才回落内置清单）。
+func (handler *Handler) HandleDeviceRules(routerCtx *gin.Context) {
+	if _, hasDevice := auth.DeviceFrom(routerCtx); !hasDevice {
+		routerCtx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "设备身份缺失"})
+		return
+	}
+	rulesPayload, buildErr := handler.service.BuildDeviceRules(routerCtx.Request.Context())
+	if buildErr != nil {
+		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "组装下发规则失败"})
+		return
+	}
+	routerCtx.JSON(http.StatusOK, rulesPayload)
 }

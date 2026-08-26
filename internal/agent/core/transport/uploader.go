@@ -98,6 +98,50 @@ func NewUploader(serverBaseURL string, deviceToken string, agentVersion string,
 	}, nil
 }
 
+// SetPlugins 更新上报信封的插件能力列表（装配期调用一次）。
+// 默认值为历史遗留的 ["claude-code"]，多插件时代由流水线按实际装配覆盖，
+// 保证信封能力上报与真实采集范围一致（含 spool 重放路径——重放复用同一客户端）。
+func (uploader *Uploader) SetPlugins(pluginNames []string) {
+	uploader.plugins = pluginNames
+}
+
+// GetDeviceRules 拉取服务端下发的启用规则集。单次尝试不做内部退避重试：
+// 调用方是周期同步循环，失败等下一轮即可；4xx 归类 NonRetryable 便于日志分级。
+func (uploader *Uploader) GetDeviceRules(ctx context.Context) (schema.DeviceRulesPayload, error) {
+	var rulesPayload schema.DeviceRulesPayload
+	if uploader.deviceToken == "" {
+		return rulesPayload, &NonRetryableError{StatusCode: 0, Detail: "本地无设备 Token"}
+	}
+	rulesRequest, buildErr := http.NewRequestWithContext(ctx, http.MethodGet,
+		uploader.serverBaseURL+"/api/v1/devices/rules", nil)
+	if buildErr != nil {
+		return rulesPayload, fmt.Errorf("构建规则拉取请求失败: %w", buildErr)
+	}
+	rulesRequest.Header.Set("Authorization", "Bearer "+uploader.deviceToken)
+
+	response, doErr := uploader.httpClient.Do(rulesRequest)
+	if doErr != nil {
+		return rulesPayload, fmt.Errorf("规则拉取请求发送失败: %w", doErr)
+	}
+	defer func() { _ = response.Body.Close() }()
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if readErr != nil {
+		return rulesPayload, fmt.Errorf("读取规则响应失败: %w", readErr)
+	}
+	switch {
+	case response.StatusCode == http.StatusOK:
+		if unmarshalErr := json.Unmarshal(responseBytes, &rulesPayload); unmarshalErr != nil {
+			return rulesPayload, fmt.Errorf("解析规则响应失败: %w", unmarshalErr)
+		}
+		return rulesPayload, nil
+	case response.StatusCode >= 500:
+		return rulesPayload, fmt.Errorf("服务端暂时不可用(状态码 %d): %s",
+			response.StatusCode, string(responseBytes))
+	default:
+		return rulesPayload, &NonRetryableError{StatusCode: response.StatusCode, Detail: string(responseBytes)}
+	}
+}
+
 // RegisterDevice 注册设备并换取一次性下发的设备 Token。
 func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceInfo) (RegistrationResult, error) {
 	var registrationResult RegistrationResult
