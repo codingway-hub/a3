@@ -1,0 +1,55 @@
+cmd/agent/plugins_test.go
+  s_8301e3490dd7cb::t_eb1cf57804c6d7 22
+internal/agent/plugins/codex/parser.go
+  s_8301e3490dd7cb::t_5a7171d4268486 16-18,30,34,37
+  s_8301e3490dd7cb::t_5e275953895119 160-181,185-186,191,193-227,267,272-273,275-277,282-283,352
+  s_8301e3490dd7cb::t_7ac1cba56e59c5 42-63,69-76
+  s_8301e3490dd7cb::t_4aa7f9a9861f0d 64-68
+  s_8301e3490dd7cb::t_8e846e1bdf79c4 4,7,135-137,150-155,188,228-266,268-271,274,278-281,284-351
+  s_8301e3490dd7cb::t_caaeb64763d909 77-134,138-149,156-158
+  s_8301e3490dd7cb::t_489f11d3a8c587 159
+  s_8301e3490dd7cb::t_99bb4359a8bc09 20-26,182-184
+  s_8301e3490dd7cb::t_224b2df0d59ba3 1-3,5-6,8-15,19,27-29,31-33,35-36,38-41
+  s_8301e3490dd7cb::t_660a751147ee1a 187,189-190,192
+internal/agent/plugins/codex/plugin.go
+  s_8301e3490dd7cb::t_22e5dc72e3cd7b 1-16,18-25,28-29,32-36,52
+  s_8301e3490dd7cb::t_901da050cf3494 17,26-27,30,37-51
+  s_8301e3490dd7cb::t_5ffa3cdaccc3a3 31
+internal/agent/plugins/codex/parser_test.go
+  s_8301e3490dd7cb::t_ec2081a7a84ccc 69-81
+  s_8301e3490dd7cb::t_181995c070aece 58-68
+  s_8301e3490dd7cb::t_61f8b3f916785f 100-115
+  s_8301e3490dd7cb::t_572a9e2916de3f 137-144
+  s_8301e3490dd7cb::t_d1a55dfcab7400 57
+  s_8301e3490dd7cb::t_c0aaf1a78a034c 26-38,47-54
+  s_8301e3490dd7cb::t_f0fb72bef18182 1-25,39-46,56
+  s_8301e3490dd7cb::t_9390e001203b61 116-136
+  s_8301e3490dd7cb::t_dd43ca010c2236 82-99
+  s_8301e3490dd7cb::t_725641a2a8ea9c 55
+pkg/schema/event.go
+  s_8301e3490dd7cb::t_06f524940daa16 41-43
+cmd/agent/plugins.go
+  s_8301e3490dd7cb::t_d065246f487d44 13
+  s_8301e3490dd7cb::t_81818642959805 21
+internal/agent/core/plugin.go
+  s_8301e3490dd7cb::t_9a938dcc0d1f59 5,10-12
+  s_8301e3490dd7cb::t_c159444a8eb494 13
+internal/agent/plugins/codex/doc.go
+  s_8301e3490dd7cb::t_12823aae88d562 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "fa5e1e8ff3a9ea8b3a05f8f858a98be12e6b792e",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
