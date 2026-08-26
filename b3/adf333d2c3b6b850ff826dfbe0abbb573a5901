@@ -1,0 +1,41 @@
+internal/server/store/rules.go
+  s_8301e3490dd7cb::t_6c242d3484a90f 5,7-8,12,28-46,49,57-58,66,69,77-78,86,89-134
+migrations/0005_rules_soft_delete.down.sql
+  s_8301e3490dd7cb::t_6be0e20fe777b9 1
+internal/server/api/console_rules.go
+  s_8301e3490dd7cb::t_fd43e3242a1724 7,11,13,16-51,76-213
+  s_8301e3490dd7cb::t_e30dff388539b4 214
+internal/server/api/console_test.go
+  s_8301e3490dd7cb::t_c0a5e648856f0d 314-321,327-368
+  s_8301e3490dd7cb::t_3acdd4bc803fa0 15,322-326
+internal/server/store/rules_test.go
+  s_8301e3490dd7cb::t_cd0dd0fe0e62ae 118-170
+internal/server/store/store.go
+  s_8301e3490dd7cb::t_4fb8a31ee16c91 14,21-32
+  s_8301e3490dd7cb::t_81add44c32b013 33
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_ca4d27f66a86cb 84-86
+internal/server/rules/validate_test.go
+  s_8301e3490dd7cb::t_bcdbda07a894ce 1-40
+internal/server/rules/rule.go
+  s_8301e3490dd7cb::t_78b211c76ccc7d 9,69-105
+  s_8301e3490dd7cb::t_c9c067719ab108 106
+migrations/0005_rules_soft_delete.up.sql
+  s_8301e3490dd7cb::t_6be0e20fe777b9 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b3adf333d2c3b6b850ff826dfbe0abbb573a5901",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
