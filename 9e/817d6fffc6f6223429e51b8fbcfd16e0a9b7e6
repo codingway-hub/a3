@@ -1,0 +1,45 @@
+internal/agent/plugins/claude/installer_test.go
+  s_8301e3490dd7cb::t_e851569e1ee3a0 33,51,75,79,92,142
+  s_8301e3490dd7cb::t_7d3b60ec4c66fd 42,61
+  s_8301e3490dd7cb::t_402b36e199d73a 194-195
+  s_8301e3490dd7cb::t_990fcc95882365 126-127
+  s_8301e3490dd7cb::t_e4f1bcc49f9c45 139-141
+  s_8301e3490dd7cb::t_467a6c417cffe7 143-145,191-193
+  s_8301e3490dd7cb::t_b64da6b592f200 196-198
+  s_8301e3490dd7cb::t_e4580636e4ff34 133-138,146-190,199-205
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_618aad8731c54b 6,40
+  s_8301e3490dd7cb::t_bc381c43ef47c6 45,47
+  s_8301e3490dd7cb::t_ba3910a551f64d 105-107
+internal/agent/plugins/claude/installer.go
+  s_8301e3490dd7cb::t_1ae3d24f5006e5 194-197
+  s_8301e3490dd7cb::t_f0a74b44db7a4c 192-193,199-203
+  s_8301e3490dd7cb::t_8819c6857f7fe1 90,95,252-259,261-266,268-270,272-283,288-289,291-292,299-300,304,306
+  s_8301e3490dd7cb::t_7c0fd54b590a66 12
+  s_8301e3490dd7cb::t_84557c6f657347 133-134,136
+  s_8301e3490dd7cb::t_a8bf1673ddc834 53-57,78-79
+  s_8301e3490dd7cb::t_52e13f49a10ce7 15,36,38,48,50
+  s_8301e3490dd7cb::t_c94158cde2c69e 148-149,154-159,172-174,176,178-183,185-189
+  s_8301e3490dd7cb::t_0b4d51c0f4699c 238-241,243,245-249
+  s_8301e3490dd7cb::t_2875d6ae1ad442 86,89,91-94,97-100,290,293-298,301-303,305,307,312,325
+cmd/agent/plugins_test.go
+  s_8301e3490dd7cb::t_6f8dd77822fda4 62-107
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_e29358d62340b4 7,10,23,135-136,138-139,155-157,160-164,172-181,183-211,213-214,216-238,240-251,254-264,270-302,305-307,310-311,313-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9e817d6fffc6f6223429e51b8fbcfd16e0a9b7e6",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
