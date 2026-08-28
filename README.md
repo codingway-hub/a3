@@ -1,8 +1,11 @@
 # a3 — AI Agent 行为审计平台
 
-a3（AI Agent Audit）对 AI 编码智能体（当前支持 Claude Code、Codex CLI）的工作过程做**全程留痕、风险拦截与集中审计**：
-终端侧常驻采集器把会话流解析为标准事件、在工具执行前按规则裁决高危操作，服务端集中落库并提供 Web 审计台
-（概览统计、会话检索与回放、告警中心、设备管理、导出）。
+a3（AI Agent Audit）给 AI 编码智能体（Claude Code、Codex CLI）装上「行车记录仪 + 海关」：
+**每次对话、每一步工具操作都被如实记录；高危操作（删库、泄露密钥、强推分支等）在发生前被拦下**；
+所有记录汇总到一个网页控制台，由团队负责人统一查看、回放与处置，并可按企业规则灵活定制判定边界。
+
+- 对用户：日常开发几乎感觉不到它存在，只有命令被拦截时会收到一句中文提示
+- 对管理员：一个网页，看遍全团队 AI 助手干了什么、有没有违规，规则可随时调整
 
 核心能力一览：
 
@@ -16,37 +19,72 @@ a3（AI Agent Audit）对 AI 编码智能体（当前支持 Claude Code、Codex 
 - **设备管理**：指纹去重注册、心跳在线状态、Token 鉴权上报
 - **告警中心**：服务端异步扫描入库事件生成告警，支持确认处置与 CSV 导出；规则启停 API 热更新生效
 
-## 架构
+## 使用指南：装好之后怎么用
 
-```mermaid
-flowchart LR
-    subgraph 终端
-        CC[Claude Code] -->|PreToolUse Hook| HOOK[a3-agent hook]
-        CC -->|~/.claude/projects/**/*.jsonl| WATCH[文件监听]
-        CODEX[Codex CLI] -->|~/.codex/sessions/**/*.jsonl| WATCH
-        HOOK --> CORE[a3-agent Core]
-        WATCH --> CORE
-        RULES[规则快照<br/>rules-snapshot.json] -.本地读取.-> HOOK
-        RUN[run 常驻进程] -.周期拉取.-> RULES
-        CORE -->|批量上报 / 断网落盘| SPOOL[本地 spool 缓存]
-    end
-    subgraph 服务端
-        API[HTTP :8080<br/>ingest + console API]
-        DB[(PostgreSQL)]
-        WEB[Vue3 审计台静态资源]
-        API --> DB
-        WEB --> API
-    end
-    SPOOL -->|HTTPS 批量上报| API
-    API -.devices/rules 下发.- RUN
-    审计员 -->|浏览器| WEB
+a3 由两部分组成：**装在开发机上的采集器**（记录 + 把关）和 **一个网页控制台**（汇总 + 展示）。
+全程只有两类角色，把其中一方的流程走一遍，剩下的自然就顺了。
+
+### 两类角色
+
+| 角色 | 是谁 | 要做什么 |
+| --- | --- | --- |
+| **终端用户** | 开发机上装了采集器的人 | 装一次即可，平时正常写代码，几乎感觉不到 a3 存在 |
+| **管理员** | 能登录网页控制台、看数据和管规则的人（团队/安全负责人） | 登录控制台，看概览与会话、处置告警、调整规则 |
+
+### 终端用户：三步装好，之后「被拦截」才需要你知道
+
+```bash
+# ① 向服务端登记这台机器（首次，会拿到设备身份和 Token，存到 ~/.a3/）
+./a3-agent register --server http://<服务端地址>:8080
+
+# ② 安装拦截开关（让高危命令在发生前被拦下）
+./a3-agent install-hook
+
+# ③ 常驻采集与上报（断网自动缓存，恢复后补传）
+./a3-agent run
 ```
 
-- 终端采集器 `cmd/agent`：Core 引擎 + 插件（`internal/agent/plugins/claude`、`internal/agent/plugins/codex`），插件契约见 [插件开发指南](#插件开发指南)
-- 服务端 `cmd/server`：Gin，设备侧 ingest API 与控制台 API，迁移 SQL 内嵌于二进制
-- 前端 `web`：Vue3 + Element Plus + Pinia，构建产物由服务端 `A3_WEB_DIST` 托管
+装完就正常开工。三站跑通后采集器开始后台工作：Claude Code / Codex 的每一次对话、每一次工具调用都会自动记录；
+其中高危操作按规则在**发生前**被拦下（拦截目前仅对 Claude Code 生效，Codex 只审计不拦截）。
 
-## 快速开始（单机一体化部署）
+日常里「a3 站出来亮相」只有三种情况：
+
+| 你看到的 | 说明 | 你要做什么 |
+| --- | --- | --- |
+| Claude Code 里冒出中文提示，说某条命令被审计平台拦截 | 该命令命中高危规则（如 `rm -rf /`、命令里带明文密钥） | 按提示改用其他命令重试；确认是误报就联系管理员调整对应规则 |
+| 展示时一段文本被打码成 `AKIA******` 或私钥整段替换 | 涉及明文密钥，a3 先脱敏再上报/展示 | 不用管，这是安全设计 |
+| 暂时断网但继续在用 | 事件先存本机，网络恢复自动补传，不丢不重 | 不用管 |
+
+### 管理员：登录控制台，一页一页看/管
+
+浏览器打开 `http://<服务端地址>:8080`，用部署时设置的管理员账号登录。六个页面各管一件事：
+
+| 页面 | 用途 | 用法 |
+| --- | --- | --- |
+| **概览** | 一眼掌握整体 | 看会话/事件/告警计数；数字异常说明有「值得展开看看」的情况 |
+| **会话** | 回放任何一次 AI 工作过程 | 按时间/设备/风险筛选，点开看消息与工具调用，风险事件红色高亮 |
+| **告警** | 处置需要你盯的事 | 逐条确认或忽略（状态同步更新），支持导出 CSV 留档 |
+| **设备** | 掌握都有哪些机器在采集 | 看在线状态；出现陌生设备说明有人新装了采集器 |
+| **规则** | 定义「什么会被拦、被标记」 | 内置规则只管启停；「新建自定义规则」可加自家判定逻辑 |
+| **导出** | 把数据带走 | 会话/告警均可导出，用于对接分析平台 |
+
+其中「规则」是最关键的一页——它决定整个系统拦不拦、标不标：
+
+- **内置 14 条**（删库、密钥泄露、强制推送等）默认开启，启用/停用由你随时决定；
+- 想管住自家业务动作（例如禁止向某分支强推、禁止读取某目录），就新建一条**自定义规则**，支持正则与路径约束；
+- 改动**即时生效**，最迟约 5 分钟同步到每一台终端（含拦截端）。
+
+### 常见疑问
+
+- **装了会拖慢开发吗？** —— 采集是异步的，日常几乎零感知；仅命中规则的命令多一步毫秒级裁决。
+- **被拦的命令彻底用不了吗？** —— a3 只「拦」不「删」，改命令重试即可；未命中规则的调用 100% 放行。
+- **我做的所有事都会被看到吗？** —— 是的，但范围限于 AI 助手会话日志（`~/.claude/projects`、`~/.codex/sessions`），a3 不扫描其他任何文件。展示前会脱敏。
+- **断网 / 重启会丢数据吗？** —— 不会：断网先落本地缓存，网络恢复自动补传；采集器重启后从断点续读。
+- **不想用了怎么退出？** —— `./a3-agent uninstall-hook` 摘掉拦截开关，再停掉常驻进程即可；已上报的数据按审计定位不回收。
+
+## 部署
+
+### 单机一体化（个人 / 小团队快速跑起来）
 
 ```bash
 cp deploy/.env.example deploy/.env     # 1. 编辑 A3_ADMIN_PASSWORD 等配置
@@ -71,9 +109,14 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 | `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册 | `true` |
 | `A3_WEB_DIST` | 前端静态目录；空则不托管 | 空 |
 
+### 团队集中登记
+
+以 [deploy/docker-compose.team.yml](deploy/docker-compose.team.yml) 部署时 `A3_ALLOW_AUTO_REGISTER=false`，
+设备须由管理员预先登记。具体接入流程见该文件头部说明（临时开放注册 → 设备 `register` → 改回关闭）。
+
 ## 客户端接入
 
-从 `make release-agent` 产物（`bin/release/a3-agent-*`）选取对应平台二进制，或源码构建 `make build-agent`。
+采集器二进制从 `make release-agent` 产物（`bin/release/a3-agent-*`）按平台选取，或源码构建 `make build-agent`。
 
 ### 模式一：单机自助注册
 
@@ -90,8 +133,6 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 ### 模式二：团队集中登记
 
-服务端以 [deploy/docker-compose.team.yml](deploy/docker-compose.team.yml) 部署时 `A3_ALLOW_AUTO_REGISTER=false`，
-未知设备注册返回 403。v1 的接入流程见该文件头部说明（临时开放注册 → 设备 `register` → 改回关闭）。
 已登记设备可用环境变量固定凭据运行：
 
 ```bash
@@ -141,6 +182,36 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 Hook 进程与 `run` 进程共享 spool 目录：即使采集器未常驻，被拦截的风险事件也会先落本地缓存，
 下次 `run` 启动后自动补报。Hook 配置读取失败时自动退回默认配置继续裁决，绝不阻断正常工作流；
 Hook 进程**绝不联网**，每次调用读取本地规则快照裁决（见[风险规则](#风险规则)）。
+
+## 架构
+
+```mermaid
+flowchart LR
+    subgraph 终端
+        CC[Claude Code] -->|PreToolUse Hook| HOOK[a3-agent hook]
+        CC -->|~/.claude/projects/**/*.jsonl| WATCH[文件监听]
+        CODEX[Codex CLI] -->|~/.codex/sessions/**/*.jsonl| WATCH
+        HOOK --> CORE[a3-agent Core]
+        WATCH --> CORE
+        RULES[规则快照<br/>rules-snapshot.json] -.本地读取.-> HOOK
+        RUN[run 常驻进程] -.周期拉取.-> RULES
+        CORE -->|批量上报 / 断网落盘| SPOOL[本地 spool 缓存]
+    end
+    subgraph 服务端
+        API[HTTP :8080<br/>ingest + console API]
+        DB[(PostgreSQL)]
+        WEB[Vue3 审计台静态资源]
+        API --> DB
+        WEB --> API
+    end
+    SPOOL -->|HTTPS 批量上报| API
+    API -.devices/rules 下发.- RUN
+    审计员 -->|浏览器| WEB
+```
+
+- 终端采集器 `cmd/agent`：Core 引擎 + 插件（`internal/agent/plugins/claude`、`internal/agent/plugins/codex`），插件契约见 [插件开发指南](#插件开发指南)
+- 服务端 `cmd/server`：Gin，设备侧 ingest API 与控制台 API，迁移 SQL 内嵌于二进制
+- 前端 `web`：Vue3 + Element Plus + Pinia，构建产物由服务端 `A3_WEB_DIST` 托管
 
 ## 插件开发指南
 
