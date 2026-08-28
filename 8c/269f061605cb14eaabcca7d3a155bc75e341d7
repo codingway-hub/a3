@@ -1,0 +1,19 @@
+README.md
+  s_8301e3490dd7cb::t_bfa33cd83014aa 3-8,22,24-44,47-58,60-87,112-116,119,186-215,346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8c269f061605cb14eaabcca7d3a155bc75e341d7",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
