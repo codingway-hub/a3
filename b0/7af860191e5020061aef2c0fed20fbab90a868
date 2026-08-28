@@ -1,0 +1,24 @@
+README.md
+  s_8301e3490dd7cb::t_ef7909fb5895b2 3,9,11-12
+  s_8301e3490dd7cb::t_6724c94a9570ed 171-191
+  s_8301e3490dd7cb::t_090bd79d078a6d 26,29-30,41,45
+  s_8301e3490dd7cb::t_4bed924c770890 120-124
+  s_8301e3490dd7cb::t_ba2006947047d8 217-234,236,238-239
+  s_8301e3490dd7cb::t_7104debb34da37 128-140,142-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b07af860191e5020061aef2c0fed20fbab90a868",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
