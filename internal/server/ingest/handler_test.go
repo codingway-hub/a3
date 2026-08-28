@@ -156,7 +156,12 @@ func TestDeviceRulesEndpointWaterfall(t *testing.T) {
 	assert.Len(t, firstPayload.Rules, 14, "内置种子共 14 条")
 
 	// ③ 服务端停用一条 → 下一次拉取条数减一且摘要变化（替换制语义的源头）
+	// 停用会改写共享 a3_test 库的内置行，必须恢复：servetest 不重置 rules，
+	// 而 TRUNCATE 会连迁移种子一起清掉，恢复 enabled 才是正确清理方式
 	require.NoError(t, eventStore.SetRuleEnabled(ctx, "cmd.rm_rf_root", false))
+	t.Cleanup(func() {
+		_ = eventStore.SetRuleEnabled(context.Background(), "cmd.rm_rf_root", true)
+	})
 	secondFetch := fetchRules(registerResponse.Token)
 	require.Equal(t, http.StatusOK, secondFetch.Code)
 	var secondPayload schema.DeviceRulesPayload
