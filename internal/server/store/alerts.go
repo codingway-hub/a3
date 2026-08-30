@@ -23,6 +23,8 @@ type Alert struct {
 	Status         string
 	CreatedAt      time.Time
 	AcknowledgedAt *time.Time
+	NotifiedAt     *time.Time // 外送成功时刻；NULL=尚未外送到通知渠道
+	NotifyAttempts int        // 外送失败次数；达到上限后轮询查询不再返回（坏 URL 自然老化）
 }
 
 // CreateAlert 写入一条告警；id/created_at 由数据库生成后回填，初始状态固定为 open。
@@ -61,7 +63,7 @@ func (store *Store) AcknowledgeAlert(ctx context.Context, alertID string) error 
 	return nil
 }
 
-const alertColumns = `id, device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary, status, created_at, acknowledged_at`
+const alertColumns = `id, device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary, status, created_at, acknowledged_at, notified_at, notify_attempts`
 
 // AlertFilter 描述告警列表的筛选条件；空串表示不过滤。
 type AlertFilter struct {
@@ -143,7 +145,8 @@ func scanAlertRows(rows pgx.Rows) ([]Alert, error) {
 		var alertRow Alert
 		if scanErr := rows.Scan(&alertRow.ID, &alertRow.DeviceID, &alertRow.SessionKey, &alertRow.EventID,
 			&alertRow.RuleID, &alertRow.RuleName, &alertRow.Severity, &alertRow.Action, &alertRow.Snippet, &alertRow.Summary,
-			&alertRow.Status, &alertRow.CreatedAt, &alertRow.AcknowledgedAt); scanErr != nil {
+			&alertRow.Status, &alertRow.CreatedAt, &alertRow.AcknowledgedAt,
+			&alertRow.NotifiedAt, &alertRow.NotifyAttempts); scanErr != nil {
 			return nil, scanErr
 		}
 		alertList = append(alertList, alertRow)
