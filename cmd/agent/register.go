@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -36,7 +35,7 @@ func persistServerURL(stateDirectory string, serverURL string) error {
 	return os.WriteFile(filepath.Join(stateDirectory, "server-url"), []byte(serverURL), 0600)
 }
 
-// resolveDeviceIdentity 依次尝试：CLI/env Token → 本地状态文件 → 单机自动注册。
+// resolveDeviceIdentity 依次尝试：CLI/env Token → 本地状态文件；注册入口唯一化为显式 register。
 // 返回 (token, deviceID, error)。
 func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger *slog.Logger) (string, string, error) {
 	if agentConfig.DeviceToken != "" {
@@ -60,46 +59,9 @@ func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger 
 		}
 		return storedToken, storedIdentityDeviceID, nil
 	}
-
-	// 无 Token：仅本地地址允许自动注册（单机模式），分布式部署要求显式 register
-	if !isLocalServerURL(agentConfig.ServerURL) {
-		return "", "", fmt.Errorf(
-			"缺少设备 Token：请先执行 a3-agent register --server %s 完成注册（远程服务端不自动注册）",
-			agentConfig.ServerURL)
-	}
-	logger.Info("检测到本地服务端且无 Token，执行单机自动注册")
-	uploaderClient, uploaderErr := transport.NewUploader(
-		agentConfig.ServerURL, "", agentVersion, agentConfig.InsecureTLS, logger)
-	if uploaderErr != nil {
-		return "", "", uploaderErr
-	}
-	machineFingerprint := buildMachineFingerprint()
-	// 本地无 Token 的自动注册不带凭证；服务端若已存在同指纹 active 设备会回 409
-	// （本地 Token 丢失场景），据此给出吊销/恢复指引而不是反复重试。
-	registrationResult, registerErr := uploaderClient.RegisterDevice(ctx, transport.DeviceInfo{
-		Hostname: shortHostname(), OS: runtime.GOOS, Arch: runtime.GOARCH,
-		MachineFingerprint: machineFingerprint,
-	}, "")
-	if registerErr != nil {
-		var rejectedErr *transport.NonRetryableError
-		if errors.As(registerErr, &rejectedErr) && rejectedErr.StatusCode == http.StatusConflict {
-			return "", "", fmt.Errorf(
-				"自动注册被拒：本机指纹已登记但本地无凭证（Token 已丢失？）。\n" +
-					"恢复路径：管理员在控制台吊销该设备后，重新执行 a3-agent register 即可重新上号")
-		}
-		return "", "", fmt.Errorf("自动注册失败: %w", registerErr)
-	}
-	if storeErr := storeDeviceIdentity(agentConfig.StateDir,
-		registrationResult.Token, registrationResult.DeviceID); storeErr != nil {
-		logger.Warn("设备身份写盘失败(本次运行仍可用)",
-			slog.String("error", storeErr.Error()))
-	}
-	if persistErr := persistServerURL(agentConfig.StateDir, agentConfig.ServerURL); persistErr != nil {
-		logger.Warn("服务端地址写盘失败(run 时需 A3_SERVER_URL 环境变量)",
-			slog.String("error", persistErr.Error()))
-	}
-	logger.Info("自动注册完成", slog.String("device_id", registrationResult.DeviceID))
-	return registrationResult.Token, registrationResult.DeviceID, nil
+	return "", "", fmt.Errorf(
+		"缺少设备 Token：请先执行 a3-agent register --server %s 完成注册",
+		agentConfig.ServerURL)
 }
 
 // registerCommand 显式注册子命令（分布式部署模式）。
@@ -406,19 +368,6 @@ func shortHostnameFrom(hostName string) string {
 		}
 	}
 	return hostName
-}
-
-// isLocalServerURL 判断服务端是否为本机地址（决定是否允许自动注册）。
-func isLocalServerURL(serverURLText string) bool {
-	parsedURL, parseErr := url.Parse(serverURLText)
-	if parseErr != nil {
-		return false
-	}
-	switch parsedURL.Hostname() {
-	case "127.0.0.1", "localhost", "::1":
-		return true
-	}
-	return false
 }
 
 // readStoredDeviceToken / readStoredDeviceID / storeDeviceIdentity 状态目录读写。

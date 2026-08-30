@@ -20,24 +20,6 @@ func TestRunAgentCLISubcommandDispatch(t *testing.T) {
 	assert.Equal(t, 1, runAgentCLI([]string{"hook"}), "hook 缺子子命令应失败")
 }
 
-func TestIsLocalServerURL(t *testing.T) {
-	testCases := []struct {
-		serverURL   string
-		expectLocal bool
-	}{
-		{"http://127.0.0.1:8080", true},
-		{"http://localhost:8080", true},
-		{"http://[::1]:8080", true},
-		{"https://a3.example.com", false},
-		{"http://192.168.1.10:8080", false},
-		{"::not-a-url::", false},
-	}
-	for _, testCase := range testCases {
-		assert.Equal(t, testCase.expectLocal, isLocalServerURL(testCase.serverURL),
-			"server_url=%s", testCase.serverURL)
-	}
-}
-
 func TestShortHostnameFrom(t *testing.T) {
 	assert.Equal(t, "mbp", shortHostnameFrom("mbp.example.com"))
 	assert.Equal(t, "mbp-local", shortHostnameFrom("mbp-local"))
