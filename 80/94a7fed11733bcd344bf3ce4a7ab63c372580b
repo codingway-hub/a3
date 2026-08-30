@@ -1,0 +1,33 @@
+deploy/.env.example
+  s_8301e3490dd7cb::t_8845a8dc993792 14-15,17-25
+deploy/docker-compose.yml
+  s_8301e3490dd7cb::t_a23e9057d8ab3d 38-40,42-43
+deploy/docker-compose.team.yml
+  s_8301e3490dd7cb::t_3971bee94cce0d 2,7
+  s_8301e3490dd7cb::t_8e86193f599af4 44-45,47-48
+README.md
+  s_8301e3490dd7cb::t_91fbec4016cf68 109,113-114
+  s_8301e3490dd7cb::t_fec849fda01cd1 219
+  s_8301e3490dd7cb::t_1db249dd9aa3bd 326-327
+  s_8301e3490dd7cb::t_b49b7dc6f337a5 19
+  s_8301e3490dd7cb::t_c7ff64f21a924c 161-163
+  s_8301e3490dd7cb::t_0de290d45b73ff 137-139
+  s_8301e3490dd7cb::t_e071d4efea8bc9 95-98
+  s_8301e3490dd7cb::t_3ef21eca06dbec 191-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8094a7fed11733bcd344bf3ce4a7ab63c372580b",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
