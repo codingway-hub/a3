@@ -1,0 +1,21 @@
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_6c4ab7b0e528ee 38,62-64
+internal/agent/core/config.go
+  s_8301e3490dd7cb::t_35c7d1accd0aca 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "164595b009c27e427f88dfb107ffef20bcaa3aa6",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
