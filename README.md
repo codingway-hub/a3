@@ -339,6 +339,7 @@ Codex 官方 hooks 尚为实验特性（仅可靠覆盖 Bash、需人工 trust�
 - [业务说明（BRD）](docs/a3%20%28AI%20Agent%20Audit%29%20_%20开源项目业务说明%20%28README-Style%20BRD%29.md)
 - [整体软件技术架构设计](docs/a3%20(AI%20Agent%20Audit)%20整体软件技术架构设计（通用可扩展基座）.md)
 - [v1.0 一期落地技术方案](docs/a3%20v1.0%20一期落地技术方案（ClaudeCode%20专属实现文档）.md)
+- [路线图](docs/ROADMAP.md)
 
 ## 开发
 
