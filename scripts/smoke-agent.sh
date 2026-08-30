@@ -21,8 +21,38 @@ AGENT_BIN="$SANDBOX_HOME/a3-agent"
 export HOME="$SANDBOX_HOME"
 export A3_SERVER_URL="$BASE_URL"
 
+# register_device / register_or_selfheal：同机指纹重复演练会撞 B1 凭证规则
+# （指纹与 HOME 无关），此时经管理员控制台吊销旧 active 设备后再重建。
+register_device() {
+  "$AGENT_BIN" register --server "$BASE_URL" >"$SANDBOX_HOME/register.log" 2>&1
+}
+register_or_selfheal() {
+  if register_device; then
+    return 0
+  fi
+  if grep -q "需携带既有 Token" "$SANDBOX_HOME/register.log"; then
+    echo "    同机指纹已登记：以管理员身份吊销旧设备后重新注册"
+    MACHINE_SHORT_HOSTNAME="$(hostname | cut -d. -f1)"
+    REVOKE_JWT=$(curl -sfS -X POST "$BASE_URL/api/v1/auth/login" \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASSWORD\"}" \
+      | sed -E 's/.*"token":"([^"]+)".*/\1/')
+    OLD_DEVICE_ID=$(curl -sfS "$BASE_URL/api/v1/devices" -H "Authorization: Bearer $REVOKE_JWT" \
+      | jq -r --arg hostname "$MACHINE_SHORT_HOSTNAME" \
+          '.items[] | select(.hostname==$hostname and .status=="active") | .device_id' | head -1)
+    [ -n "$OLD_DEVICE_ID" ] || { echo "❌ 未找到同机 active 设备可吊销"; cat "$SANDBOX_HOME/register.log"; exit 1; }
+    curl -sfS -X PATCH "$BASE_URL/api/v1/devices/$OLD_DEVICE_ID" \
+      -H "Authorization: Bearer $REVOKE_JWT" -H 'Content-Type: application/json' \
+      -d '{"status":"revoked"}' >/dev/null
+    echo "    已吊销 $OLD_DEVICE_ID"
+  else
+    echo "❌ 设备注册失败"; cat "$SANDBOX_HOME/register.log"; exit 1
+  fi
+  register_device || { echo "❌ 吊销后重新注册仍失败"; cat "$SANDBOX_HOME/register.log"; exit 1; }
+}
+
 echo "==> ② 显式注册设备"
-"$AGENT_BIN" register --server "$BASE_URL"
+register_or_selfheal
 DEVICE_ID=$(cat "$HOME/.a3/device-id")
 echo "    device_id=$DEVICE_ID"
 
@@ -43,7 +73,7 @@ echo "    已拦截(exit=2)"
 echo "==> ⑤ Hook alert 演练：git reset --hard 放行且风险事件入本地缓存"
 printf '%s' '{"session_id":"smoke-hook","tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD~1"}}' \
   | "$AGENT_BIN" hook pretooluse 2>/dev/null
-SPOOL_COUNT=$(find "$HOME/.a3/spool" -maxdepth 1 -name 'batch-*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
+SPOOL_COUNT=$(find "$HOME/.a3/spool/incoming" -maxdepth 1 -name 'batch-*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
 [ "$SPOOL_COUNT" -ge 1 ] || { echo "❌ alert 风险事件未入缓存队列"; exit 1; }
 echo "    本地缓存批次 $SPOOL_COUNT 个"
 

@@ -16,7 +16,7 @@ trap 'kill "$AGENT_PID" 2>/dev/null || true; rm -rf "$SANDBOX_HOME"' EXIT
 
 # count_spool_batches 统计沙箱缓存队列批次数（find 对空目录返回 0 条且退出码为 0）。
 count_spool_batches() {
-  find "$HOME/.a3/spool" -maxdepth 1 -name 'batch-*.jsonl' 2>/dev/null | wc -l | tr -d ' '
+  find "$HOME/.a3/spool/incoming" -maxdepth 1 -name 'batch-*.jsonl' 2>/dev/null | wc -l | tr -d ' '
 }
 
 echo "==> ① 构建采集器（bin/a3-agent 不存在时现场构建）"
@@ -25,8 +25,41 @@ AGENT_BIN="$REPO_ROOT/bin/a3-agent"
 
 export HOME="$SANDBOX_HOME"
 
+# register_device 在沙箱内注册本机；同机指纹已登记时（B1 凭证规则，机器指纹与
+# HOME 无关，重复演练必撞车）返回失败，交由 register_or_selfheal 自愈。
+register_device() {
+  A3_SERVER_URL="$BASE_URL" "$AGENT_BIN" register --server "$BASE_URL" >"$SANDBOX_HOME/register.log" 2>&1
+}
+
+# register_or_selfheal 注册；撞指纹则经管理员控制台吊销既有 active 设备后重建
+# （同时验证 B2/B3 吊销闭环），使演练可在这台机器上重复执行。
+register_or_selfheal() {
+  if register_device; then
+    return 0
+  fi
+  if grep -q "需携带既有 Token" "$SANDBOX_HOME/register.log"; then
+    echo "    同机指纹已登记：以管理员身份吊销旧设备后重新注册"
+    MACHINE_SHORT_HOSTNAME="$(hostname | cut -d. -f1)"
+    REVOKE_JWT=$(curl -sfS -X POST "$BASE_URL/api/v1/auth/login" \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASSWORD\"}" \
+      | sed -E 's/.*"token":"([^"]+)".*/\1/')
+    OLD_DEVICE_ID=$(curl -sfS "$BASE_URL/api/v1/devices" -H "Authorization: Bearer $REVOKE_JWT" \
+      | jq -r --arg hostname "$MACHINE_SHORT_HOSTNAME" \
+          '.items[] | select(.hostname==$hostname and .status=="active") | .device_id' | head -1)
+    [ -n "$OLD_DEVICE_ID" ] || { echo "❌ 未找到同机 active 设备可吊销"; cat "$SANDBOX_HOME/register.log"; exit 1; }
+    curl -sfS -X PATCH "$BASE_URL/api/v1/devices/$OLD_DEVICE_ID" \
+      -H "Authorization: Bearer $REVOKE_JWT" -H 'Content-Type: application/json' \
+      -d '{"status":"revoked"}' >/dev/null
+    echo "    已吊销 $OLD_DEVICE_ID"
+  else
+    echo "❌ 设备注册失败"; cat "$SANDBOX_HOME/register.log"; exit 1
+  fi
+  register_device || { echo "❌ 吊销后重新注册仍失败"; cat "$SANDBOX_HOME/register.log"; exit 1; }
+}
+
 echo "==> ② 先对真实服务端注册，取得设备身份"
-A3_SERVER_URL="$BASE_URL" "$AGENT_BIN" register --server "$BASE_URL" >/dev/null
+register_or_selfheal
 
 PROJ_DIR="$HOME/.claude/projects/drill"
 SESSION_ID="offline-drill-$(date +%s)"
