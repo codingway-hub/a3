@@ -1,0 +1,41 @@
+internal/agent/core/config_test.go
+  s_8301e3490dd7cb::t_0a10818a12e3f4 150-169
+  s_8301e3490dd7cb::t_1dcca9865d097f 65-72
+  s_8301e3490dd7cb::t_b4eeade636d5cf 73,84-85
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_27456edb482ee7 77-78
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_6c3040aee06b85 76-77
+internal/agent/core/config.go
+  s_8301e3490dd7cb::t_1dcca9865d097f 24-25,30-35
+  s_8301e3490dd7cb::t_2fbe81b64a74e2 66-75
+  s_8301e3490dd7cb::t_454138eafb7bc7 26-29
+  s_8301e3490dd7cb::t_a74a69aa2d8a7e 131-136
+internal/agent/core/spool/spool.go
+  s_8301e3490dd7cb::t_34407ae12d7601 4-19,25,33-39,41,50-56,62-63,65-70,73,75-81,88-89,91-107,114,117,131,135-139,142-145,147-151,157,163-192,194,202-205,211,213,219-225,228,230,237-239,244-262,264-269,272-273,275-278,281-287,290-291,293-307,310,313-315,318,322-326,329-332,337-371,375-383,385,387-390,394,408-452
+  s_8301e3490dd7cb::t_1dcca9865d097f 43-45,47-49,453
+  s_8301e3490dd7cb::t_57d6c62ec5fc87 46
+  s_8301e3490dd7cb::t_1c60aea2b65a6c 395-407
+  s_8301e3490dd7cb::t_ed9a105b96e6fe 384,386
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_baaeb6a5a72184 172-173
+internal/agent/core/spool/spool_test.go
+  s_8301e3490dd7cb::t_bbd0d21e08ef8e 270-271,281
+  s_8301e3490dd7cb::t_f4fcab4bc54652 144-269,272-280,282-321
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3fd2b11e123bc15592ee42e9ec8fe705267bb7eb",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
