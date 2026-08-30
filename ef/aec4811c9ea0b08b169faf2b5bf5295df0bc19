@@ -1,0 +1,46 @@
+internal/server/config/config.go
+  s_8301e3490dd7cb::t_f096affb951aff 21,23-24,30,34-38,42
+internal/server/config/config_test.go
+  s_8301e3490dd7cb::t_87b478b37a52ad 1-80
+migrations/0006_events_composite_key.down.sql
+  s_8301e3490dd7cb::t_e3f7e97f68b3e4 1-5
+migrations/0006_events_composite_key.up.sql
+  s_8301e3490dd7cb::t_849584e5123207 1-9
+cmd/server/main.go
+  s_8301e3490dd7cb::t_706a2df8902318 134-142
+  s_8301e3490dd7cb::t_fe86a9ff6a543b 84,86-88
+migrations/0007_devices_fingerprint_unique.down.sql
+  s_8301e3490dd7cb::t_4e1eb1022011a7 1-5
+internal/agent/core/plugin.go
+  s_8301e3490dd7cb::t_3ce4c172dacf35 21-22,27
+cmd/server/main_test.go
+  s_8301e3490dd7cb::t_fc9323d1a5d6db 1-3,5-21,28-32,41-43,45-47
+  s_8301e3490dd7cb::t_5932892fbf855f 4,22-27,33-40,44,48-127,129-135,140,161-177
+  s_8301e3490dd7cb::t_9dbf44494778c4 136-139
+  s_8301e3490dd7cb::t_2f918a75062294 128,141-160
+  s_8301e3490dd7cb::t_9ac82d002d14fe 178
+internal/agent/plugins/claude/hook.go
+  s_8301e3490dd7cb::t_45cf54cb22689b 119
+  s_8301e3490dd7cb::t_5e363048d46999 99-100,104-112,114
+internal/agent/plugins/claude/hook_test.go
+  s_8301e3490dd7cb::t_ad86d4e18505cf 136-191
+migrations/0007_devices_fingerprint_unique.up.sql
+  s_8301e3490dd7cb::t_8823973b2878c3 1-11,13-24
+  s_8301e3490dd7cb::t_001a0ab499ce03 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "efaec4811c9ea0b08b169faf2b5bf5295df0bc19",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
