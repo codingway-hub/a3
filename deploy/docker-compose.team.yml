@@ -1,9 +1,10 @@
 # a3 团队分布式部署变体：与单机版(deploy/docker-compose.yml)的唯一差异是
-# A3_ALLOW_AUTO_REGISTER=false —— 关闭终端自助注册，注册端点对未知设备返回 403。
+# A3_ALLOW_AUTO_REGISTER 默认 false —— 关闭终端自助注册，注册端点对未知设备返回 403。
 #
 # 新设备接入流程（v1 简化，无控制台预生成令牌界面）：
 #   1. 将下方 A3_ALLOW_AUTO_REGISTER 临时改为 "true"，docker compose up -d 滚动重启；
 #   2. 设备侧执行 ./a3-agent register --server https://a3.example.internal 完成登记；
+#      （同机器重复登记的指纹冲突会要求携带旧 Token 作凭证，见 README「注册需旧令牌」）
 #   3. 改回 "false" 重启，仅保留已登记设备上报。
 #
 # 用法同单机版：
@@ -40,10 +41,11 @@ services:
       A3_ADMIN_USER: ${A3_ADMIN_USER:-admin}
       A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
       A3_JWT_SECRET: ${A3_JWT_SECRET:-}
-      # 团队模式核心差异：接入流程见文件头部说明
-      A3_ALLOW_AUTO_REGISTER: "false"
+      # 团队模式核心差异：接入流程见文件头部说明（默认关，登记后再关回）
+      A3_ALLOW_AUTO_REGISTER: ${A3_ALLOW_AUTO_REGISTER:-false}
     ports:
-      - "${A3_HTTP_PORT:-8080}:8080"
+      # 主机端口默认仅绑回环；团队部署若需跨机上报，把本行改为 0.0.0.0 并前置 TLS
+      - "127.0.0.1:${A3_HTTP_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
       interval: 10s

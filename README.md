@@ -16,7 +16,7 @@ a3（AI Agent Audit）给 AI 编码智能体（Claude Code、Codex CLI）装上�
 - **敏感信息防护**：密钥/私钥/连接串等 DLP 规则命中即拦截，命中片段脱敏后展示
 - **断网续传**：终端本地磁盘缓存（spool），网络恢复后自动续传，事件不丢
 - **出站脱敏**：会话内容、工具输入/结果在终端侧先做密钥形态二次脱敏再上报
-- **设备管理**：指纹去重注册、心跳在线状态、Token 鉴权上报
+- **设备管理**：指纹去重注册、Token 鉴权上报、同指纹轮换需旧令牌作凭证、控制台一键吊销/恢复
 - **告警中心**：服务端异步扫描入库事件生成告警，支持确认处置与 CSV 导出；规则启停 API 热更新生效
 
 ## 使用指南：装好之后怎么用
@@ -92,6 +92,10 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 # 3. 浏览器打开 http://127.0.0.1:8080 ，用 .env 中的管理员账号登录
 ```
 
+> 快速上手想免登记直接接入：在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true`
+> 再 `make compose-up`，终端对本机地址 `register` 即可。生产默认关闭，接入流程见
+> [团队集中登记](#团队集中登记)。
+
 停止与清理：`make compose-down`（数据保留在 docker volume `a3_pgdata`）。
 
 > 注意：PostgreSQL 容器仅在**首次初始化**空数据卷时读取 `A3_POSTGRES_PASSWORD`；
@@ -102,11 +106,12 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
-| `A3_ADDR` | 监听地址 | `:8080` |
+| `A3_ADDR` | 监听地址：默认仅绑本机回环，避免明文意外暴露到局域网 | `127.0.0.1:8080` |
 | `A3_DATABASE_URL` | PostgreSQL 连接串 | `postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable` |
 | `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子管理员；口令留空则随机生成并打印日志 | `admin` / 空(随机) |
 | `A3_JWT_SECRET` | 登录态签名密钥；留空则每次重启随机生成(需重新登录) | 空(随机) |
-| `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册 | `true` |
+| `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册（单机快速上手可开 `true`） | `false` |
+| `A3_TLS_CERT` / `A3_TLS_KEY` | 可选 HTTPS：同时设置证书与私钥 PEM 路径才走 `ListenAndServeTLS`；仅设其一服务端启动报错 | 空(HTTP) |
 | `A3_WEB_DIST` | 前端静态目录；空则不托管 | 空 |
 
 ### 团队集中登记
@@ -129,7 +134,9 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 ./a3-agent run                                            # 常驻采集与上报
 ```
 
-同指纹重复注册返回既有设备身份并轮换 Token。自签名 HTTPS 场景加 `--insecure-skip-tls-verify`。
+同指纹重复注册需带旧 Token 作凭证（命令自动读取本机 `~/.a3/device-token`）：凭证匹配才轮换新
+Token 且原 Token 即刻失效；凭证缺失/不匹配即拒绝，防设备被顶替。Token 不慎丢失时，由管理员在
+控制台吊销该设备后重新 `register` 建立新身份。自签名 HTTPS 场景加 `--insecure-skip-tls-verify`。
 
 ### 模式二：团队集中登记
 
@@ -151,7 +158,9 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 | --- | --- | --- |
 | `A3_SERVER_URL` | 服务端地址 | `http://127.0.0.1:8080` |
 | `A3_DEVICE_TOKEN` | 设备 Token | 无(需 register 或 env 提供) |
-| `A3_SPOOL_DIR` | 断网缓存目录 | `~/.a3/spool` |
+| `A3_SPOOL_DIR` | 断网缓存根目录（incoming/working/quarantine 三子目录） | `~/.a3/spool` |
+| `A3_SPOOL_MAX_BYTES` | 断网缓存总容量（含在途租约）；超限最旧批次移入隔离区而非删除 | 512MB |
+| `A3_SPOOL_QUARANTINE_MAX_BYTES` | 隔离区归档上限；仅当超限才删除最旧归档并告警 | 128MB |
 | `A3_STATE_DIR` | 身份/位点状态目录 | `~/.a3` |
 | `A3_BATCH_SIZE` | 上报批大小（上限 500，超限服务端整批拒绝） | 200 |
 | `A3_FLUSH_INTERVAL` | 批量化冲刷间隔（秒） | 2s |
@@ -179,8 +188,11 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 旧形态 `<a3-binary> hook pretooluse` 升级后仍被识别，下次 install 时原位升级为新条目。不支持 Hook 的
 插件（Codex CLI，见下文支持矩阵）在 install 时给出友好提示并正常退出，不算失败。
 
-Hook 进程与 `run` 进程共享 spool 目录：即使采集器未常驻，被拦截的风险事件也会先落本地缓存，
-下次 `run` 启动后自动补报。Hook 配置读取失败时自动退回默认配置继续裁决，绝不阻断正常工作流；
+Hook 进程与 `run` 进程共用同一 spool 根（默认 `~/.a3/spool`），目录三分：
+`incoming/`（生产者唯一写点）、`working/`（消费租约）、`quarantine/`（归档留证）。
+即使采集器未常驻，被拦截的风险事件也会先落 `incoming/`，下次 `run` 启动后自动补报；
+容量超限时最旧批次**移入隔离区归档而非删除**，上报被明确拒绝（400/422）或解码损坏的批次
+同样归档留痕。Hook 配置读取失败时自动退回默认配置继续裁决，绝不阻断正常工作流；
 Hook 进程**绝不联网**，每次调用读取本地规则快照裁决（见[风险规则](#风险规则)）。
 
 ## 架构
@@ -204,7 +216,7 @@ flowchart LR
         API --> DB
         WEB --> API
     end
-    SPOOL -->|HTTPS 批量上报| API
+    SPOOL -->|批量上报(TLS 可选)| API
     API -.devices/rules 下发.- RUN
     审计员 -->|浏览器| WEB
 ```
@@ -311,7 +323,8 @@ Codex 官方 hooks 尚为实验特性（仅可靠覆盖 Bash、需人工 trust�
 
 ## 隐私与脱敏
 
-- 会话内容仅在企业内网服务端落库，用于安全审计；终端到服务端走 HTTPS，设备 Token 鉴权
+- 会话内容仅在企业内网服务端落库，用于安全审计；设备 Token 鉴权上报，传输走**可选 HTTPS**
+  （设置 `A3_TLS_CERT`/`A3_TLS_KEY` 即启用；生产远程部署请务必启用 HTTPS 或前置反向代理终结 TLS）
 - 终端出站默认**二次脱敏**：对话内容、工具结果摘要与工具输入 JSON 字符串值中的密钥形态
   （AKIA、JWT、API Key、数据库连接串等）保留前 4 后 4 字符打码，PEM 私钥块整段替换；
   `A3_MASK_ENABLED=false` 可关闭（不建议）

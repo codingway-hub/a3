@@ -35,10 +35,12 @@ services:
       A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
       # 留空则每次重启随机生成，控制台需重新登录；生产建议显式设置
       A3_JWT_SECRET: ${A3_JWT_SECRET:-}
-      # 单机模式开放终端自助注册；团队模式请改 false 并显式登记设备令牌
-      A3_ALLOW_AUTO_REGISTER: "true"
+      # 单机模式开放终端自助注册？整体开关默认关闭（A3_ALLOW_AUTO_REGISTER=false），
+      # 快速上手：cp deploy/.env.example deploy/.env 后把该项改为 true 再 up。
+      A3_ALLOW_AUTO_REGISTER: ${A3_ALLOW_AUTO_REGISTER:-false}
     ports:
-      - "${A3_HTTP_PORT:-8080}:8080"
+      # 主机端口默认仅绑回环，避免控制台/上报明文暴露到局域网；需远程访问请改 0.0.0.0 并前置 TLS
+      - "127.0.0.1:${A3_HTTP_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
       interval: 10s
