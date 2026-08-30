@@ -1,0 +1,22 @@
+internal/server/store/devices.go
+  s_8301e3490dd7cb::t_1c8e59911f1ed7 62-67
+  s_8301e3490dd7cb::t_237f286b82ca26 103-109,119-121
+internal/server/ingest/service_test.go
+  s_8301e3490dd7cb::t_0c56180e6c86e8 97,103,107-109,111-113,118-121,123-127,130,132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4fb8349290b802a75a92f5161d7ea3036d12e26c",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
