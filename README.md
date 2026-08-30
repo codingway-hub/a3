@@ -98,9 +98,8 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 ./deploy/install-server.sh http://aa.bb.com:12345
 ```
 
-> 快速上手想免登记直接接入：在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true`
-> 再 `make compose-up`，终端对本机地址 `register` 即可。生产默认关闭，接入流程见
-> [团队集中登记](#团队集中登记)。
+> 一键安装（install-server.sh）会自动开放自助注册并打印关闭方法；手动部署时若想让用户
+> 免登记直接接入，在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true` 再 `make compose-up`。
 
 停止与清理：`make compose-down`（数据保留在 docker volume `a3_pgdata`）。
 
@@ -116,18 +115,16 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 | `A3_DATABASE_URL` | PostgreSQL 连接串 | `postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable` |
 | `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子管理员；口令留空则随机生成并打印日志 | `admin` / 空(随机) |
 | `A3_JWT_SECRET` | 登录态签名密钥；留空则每次重启随机生成(需重新登录) | 空(随机) |
-| `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册（单机快速上手可开 `true`） | `false` |
+| `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册（一键安装自动开启；收齐设备后建议改回关闭） | `false` |
 | `A3_TLS_CERT` / `A3_TLS_KEY` | 可选 HTTPS：同时设置证书与私钥 PEM 路径才走 `ListenAndServeTLS`；仅设其一服务端启动报错 | 空(HTTP) |
 | `A3_WEB_DIST` | 前端静态目录；空则不托管 | 空 |
 
-### 团队集中登记
-
-以 [deploy/docker-compose.team.yml](deploy/docker-compose.team.yml) 部署时 `A3_ALLOW_AUTO_REGISTER=false`，
-设备须由管理员预先登记。具体接入流程见该文件头部说明（临时开放注册 → 设备 `register` → 改回关闭）。
+> 团队集中登记场景以 [deploy/docker-compose.team.yml](deploy/docker-compose.team.yml) 部署
+> （注册开关关闭，设备须管理员预先登记），接入流程见该文件头部说明。
 
 ## 客户端接入
 
-**一条命令方式（推荐）**：管理员把控制台「接入指南」页（`http://<服务端地址>/setup-guide`，免登录）
+**一条命令方式**：管理员把控制台「接入指南」页（`http://<服务端地址>/setup-guide`，免登录）
 发给采集端用户，用户照页面复制执行 `curl http://<服务端地址>/install.sh | sh` 即可——脚本自动
 识别平台、下载采集器（服务端镜像内已内置五平台产物）、注册、装 Hook、装常驻服务。
 指南页会在注册开关关闭或产物未就绪时给出警示。详见[安装说明](docs/INSTALL.md)。
@@ -136,24 +133,20 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 采集器二进制从 `make release-agent` 产物（`bin/release/a3-agent-*`）按平台选取，或源码构建 `make build-agent`。
 
-### 模式一：单机自助注册
-
-适合个人/小团队。无 Token 运行 `run` 时，仅当服务端地址为**本机地址**（`127.0.0.1`/`localhost`/`::1`）
-且服务端 `A3_ALLOW_AUTO_REGISTER=true` 才会自动注册；远程服务端必须先显式登记：
-
 ```bash
 ./a3-agent register --server http://a3.example.com:8080   # 注册并保存 Token/设备身份到 ~/.a3/
 ./a3-agent install-hook                                   # 安装 PreToolUse Hook
-./a3-agent run                                            # 常驻采集与上报
+./a3-agent install-service                                # 安装常驻服务（开机自启、崩溃拉起）
+./a3-agent run                                            # 常驻采集与上报（无 Token 时报错，先 register）
 ```
 
 同指纹重复注册需带旧 Token 作凭证（命令自动读取本机 `~/.a3/device-token`）：凭证匹配才轮换新
 Token 且原 Token 即刻失效；凭证缺失/不匹配即拒绝，防设备被顶替。Token 不慎丢失时，由管理员在
 控制台吊销该设备后重新 `register` 建立新身份。自签名 HTTPS 场景加 `--insecure-skip-tls-verify`。
 
-### 模式二：团队集中登记
+服务端注册开关关闭时 `register` 返回 403，由管理员在 `deploy/.env` 临时开放或预先登记设备。
 
-已登记设备可用环境变量固定凭据运行：
+已登记设备也可用环境变量固定凭据运行：
 
 ```bash
 export A3_SERVER_URL=https://a3.example.internal

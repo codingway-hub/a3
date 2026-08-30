@@ -27,17 +27,11 @@ git clone <仓库地址> && cd a3
 
 > 手动方式（备用）：`cp deploy/.env.example deploy/.env` 编辑后 `make compose-up`。
 
-### 让用户能自助接入
+### 自助注册说明
 
-控制台「接入指南」页会给用户一条安装命令，但执行它需要服务端开放自动注册。
-默认是关闭的（安全设计），单机自助场景在 `deploy/.env` 设置：
-
-```ini
-A3_ALLOW_AUTO_REGISTER=true
-```
-
-然后 `docker compose -f deploy/docker-compose.yml up -d` 生效。
-生产环境建议走「开—登记—关」流程：临时开放 → 用户装完 → 关闭。
+一键安装脚本已自动开放自助注册（`A3_ALLOW_AUTO_REGISTER=true`）并打印关闭方法——
+能连到服务端的设备均可自行注册接入，收齐设备后建议关闭。手动部署时需自行在
+`deploy/.env` 设置后再 `docker compose -f deploy/docker-compose.yml up -d` 生效。
 
 ---
 
