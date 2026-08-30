@@ -1,0 +1,23 @@
+deploy/.env.example
+  s_8301e3490dd7cb::t_545ae76596da99 30-31
+deploy/docker-compose.yml
+  s_8301e3490dd7cb::t_262c4db3325383 38-39
+deploy/install-server.sh
+  s_8301e3490dd7cb::t_1ead7fbcd4cc7e 86-90,102-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "bf4e2aedd1efc4c7770befba0f4f672efd6dccf1",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
