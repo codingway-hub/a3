@@ -1,0 +1,27 @@
+cmd/server/main.go
+  s_8301e3490dd7cb::t_7a1229ec04af68 21
+  s_8301e3490dd7cb::t_ff98cc6b9e9fb6 62-71
+README.md
+  s_8301e3490dd7cb::t_33981cacd9d1a9 320-324
+  s_8301e3490dd7cb::t_1219f535f35ceb 115-117
+deploy/docker-compose.yml
+  s_8301e3490dd7cb::t_ab47abfc391978 43-46
+deploy/.env.example
+  s_8301e3490dd7cb::t_1b7239c148797b 34-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d13208e9fe83c44d95629e201770dfa6fc3d4f18",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
