@@ -1,0 +1,23 @@
+scripts/offline-drill.sh
+  s_8301e3490dd7cb::t_6fb9c1a5bb267f 19
+  s_8301e3490dd7cb::t_65ce52aa4e9091 28-60,62
+scripts/smoke-agent.sh
+  s_8301e3490dd7cb::t_70b3d9ef4beab0 24-53,55
+  s_8301e3490dd7cb::t_8dd0eaa0c7b6e6 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "860fc0e58f441e8bffb7e741dc3365c70d0bc35a",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
