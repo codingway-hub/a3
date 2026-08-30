@@ -83,6 +83,11 @@ case "$PUBLIC_HOST" in
     ;;
 esac
 
+# —— 开放自助注册：否则用户照指南页执行安装命令会撞 403 ——
+WAS_AUTO_REGISTER_ON="no"
+grep -q '^A3_ALLOW_AUTO_REGISTER=true' "$ENV_FILE" && WAS_AUTO_REGISTER_ON="yes"
+upsert_env "A3_ALLOW_AUTO_REGISTER" "true"
+
 # —— 构建并拉起 postgres + server ——
 echo "==> 构建镜像并启动（首次构建需数分钟）…"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
@@ -94,9 +99,7 @@ echo "   接入指南: $PUBLIC_URL/setup-guide  ← 把这个链接发给采集�
 if [ "$GENERATED_PASSWORD_NOTE" = "yes" ]; then
   echo "   管理员口令（随机生成，请尽快登录修改）: $(grep '^A3_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
 fi
-if ! grep -q '^A3_ALLOW_AUTO_REGISTER=true' "$ENV_FILE"; then
-  echo
-  echo "ℹ️  当前自动注册关闭（安全默认）。要让用户照指南页一条命令自助接入，"
-  echo "    请在 deploy/.env 设置 A3_ALLOW_AUTO_REGISTER=true 后执行:"
-  echo "    docker compose -f deploy/docker-compose.yml up -d"
-fi
+echo
+echo "⚠️  已开放自助注册（A3_ALLOW_AUTO_REGISTER=true）：能连到 $PUBLIC_URL 的设备"
+echo "    均可自行注册接入。收齐设备后建议关闭：deploy/.env 中改为 false，再执行"
+echo "    docker compose -f deploy/docker-compose.yml up -d"

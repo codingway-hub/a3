@@ -35,8 +35,8 @@ services:
       A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
       # 留空则每次重启随机生成，控制台需重新登录；生产建议显式设置
       A3_JWT_SECRET: ${A3_JWT_SECRET:-}
-      # 单机模式开放终端自助注册？整体开关默认关闭（A3_ALLOW_AUTO_REGISTER=false），
-      # 快速上手：cp deploy/.env.example deploy/.env 后把该项改为 true 再 up。
+      # 终端设备自助注册开关。install-server.sh 一键安装会自动改为 true（收齐设备后建议改回）；
+      # 手动部署保持 false 更安全：未开放时新设备 register 返回 403。
       A3_ALLOW_AUTO_REGISTER: ${A3_ALLOW_AUTO_REGISTER:-false}
       # 对外公开地址（install-server.sh 写入；反代场景配置即权威，用于 install.sh 注入）
       A3_PUBLIC_URL: ${A3_PUBLIC_URL:-}
