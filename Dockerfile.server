@@ -9,13 +9,20 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# ---- 阶段二：服务端编译（CGO 关闭产出纯静态二进制） ----
+# ---- 阶段二：服务端编译（CGO 关闭产出纯静态二进制）+ 采集器五平台交叉编译 ----
 FROM golang:1.25-alpine AS server-builder
 WORKDIR /build/src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/a3-server ./cmd/server
+# 采集器产物随服务端镜像分发（A3_AGENT_DIST），供 install.sh 下载安装
+RUN for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do \
+      distOS=$${platform%/*}; distArch=$${platform#*/}; \
+      distSuffix=""; [ "$$distOS" = "windows" ] && distSuffix=".exe"; \
+      CGO_ENABLED=0 GOOS=$$distOS GOARCH=$$distArch go build -trimpath -ldflags="-s -w" \
+        -o /out/agent/a3-agent-$$distOS-$$distArch$$distSuffix ./cmd/agent || exit 1; \
+    done
 
 # ---- 阶段三：运行层 ----
 FROM alpine:3.20
@@ -24,7 +31,8 @@ RUN apk add --no-cache ca-certificates \
   && adduser -D -H -s /sbin/nologin a3
 COPY --from=server-builder /out/a3-server /usr/local/bin/a3-server
 COPY --from=web-builder /build/web/dist /app/web/dist
-ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist
+COPY --from=server-builder /out/agent /app/agent
+ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist A3_AGENT_DIST=/app/agent
 EXPOSE 8080
 USER a3
 ENTRYPOINT ["a3-server"]

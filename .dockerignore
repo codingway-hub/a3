@@ -6,4 +6,3 @@ deploy
 *.md
 web/node_modules
 web/dist
-cmd/agent
