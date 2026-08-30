@@ -100,6 +100,25 @@ func (config *Config) ApplyEnv(getenv func(string) string) {
 		// 采集范围选择配错了应当启动即失败，而非静默回退默认值扩大采集范围
 		config.Plugins = ParsePluginSelection(pluginsText)
 	}
+
+	// 环境变量未指定服务端地址时，回退读 register 持久化的 server-url
+	// （install.sh 一条命令安装后，run/常驻服务进程不依赖环境变量即可找到服务端）
+	if config.ServerURL == "" {
+		config.ServerURL = LoadPersistedServerURL(config.StateDir)
+	}
+}
+
+// serverURLFileName register 成功后持久化服务端地址的文件名（StateDir 下）。
+const serverURLFileName = "server-url"
+
+// LoadPersistedServerURL 读取 StateDir 下 register 持久化的服务端地址；
+// 文件缺失/为空/含空白时返回空串，调用方继续走原校验路径报错。
+func LoadPersistedServerURL(stateDir string) string {
+	rawBytes, readErr := os.ReadFile(filepath.Join(stateDir, serverURLFileName))
+	if readErr != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(rawBytes))
 }
 
 // ParsePluginSelection 把逗号分隔的插件选择文本归一化：去首尾空白、丢弃空项、转小写。

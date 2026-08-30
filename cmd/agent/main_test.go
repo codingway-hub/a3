@@ -1,9 +1,14 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/codingway-hub/a3/internal/agent/core"
 )
 
 func TestRunAgentCLISubcommandDispatch(t *testing.T) {
@@ -52,4 +57,21 @@ func TestMachineFingerprintStableAndDistinct(t *testing.T) {
 
 	localFingerprint := buildMachineFingerprint()
 	assert.Len(t, localFingerprint, 64, "真实环境指纹也应为 sha256 十六进制")
+}
+
+func TestPersistServerURL(t *testing.T) {
+	stateDir := t.TempDir()
+	require.NoError(t, persistServerURL(stateDir, "http://a3.example.com:8080"))
+
+	rawBytes, readErr := os.ReadFile(filepath.Join(stateDir, "server-url"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "http://a3.example.com:8080", string(rawBytes))
+
+	// 重复注册幂等覆盖
+	require.NoError(t, persistServerURL(stateDir, "http://changed:1234"))
+	overwrittenBytes, _ := os.ReadFile(filepath.Join(stateDir, "server-url"))
+	assert.Equal(t, "http://changed:1234", string(overwrittenBytes))
+
+	// 回退链路闭环：core.LoadPersistedServerURL 读回一致
+	assert.Equal(t, "http://changed:1234", core.LoadPersistedServerURL(stateDir))
 }

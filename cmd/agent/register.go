@@ -30,6 +30,12 @@ const (
 	deviceIDFileName    = "device-id"
 )
 
+// persistServerURL 把服务端地址写入 StateDir（0600），供 run/常驻服务在无
+// A3_SERVER_URL 环境变量时回退读取；失败仅返回错误由调用方决定是否告警，不阻断注册。
+func persistServerURL(stateDirectory string, serverURL string) error {
+	return os.WriteFile(filepath.Join(stateDirectory, "server-url"), []byte(serverURL), 0600)
+}
+
 // resolveDeviceIdentity 依次尝试：CLI/env Token → 本地状态文件 → 单机自动注册。
 // 返回 (token, deviceID, error)。
 func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger *slog.Logger) (string, string, error) {
@@ -78,7 +84,7 @@ func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger 
 		var rejectedErr *transport.NonRetryableError
 		if errors.As(registerErr, &rejectedErr) && rejectedErr.StatusCode == http.StatusConflict {
 			return "", "", fmt.Errorf(
-				"自动注册被拒：本机指纹已登记但本地无凭证（Token 已丢失？）。\n"+
+				"自动注册被拒：本机指纹已登记但本地无凭证（Token 已丢失？）。\n" +
 					"恢复路径：管理员在控制台吊销该设备后，重新执行 a3-agent register 即可重新上号")
 		}
 		return "", "", fmt.Errorf("自动注册失败: %w", registerErr)
@@ -87,6 +93,10 @@ func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger 
 		registrationResult.Token, registrationResult.DeviceID); storeErr != nil {
 		logger.Warn("设备身份写盘失败(本次运行仍可用)",
 			slog.String("error", storeErr.Error()))
+	}
+	if persistErr := persistServerURL(agentConfig.StateDir, agentConfig.ServerURL); persistErr != nil {
+		logger.Warn("服务端地址写盘失败(run 时需 A3_SERVER_URL 环境变量)",
+			slog.String("error", persistErr.Error()))
 	}
 	logger.Info("自动注册完成", slog.String("device_id", registrationResult.DeviceID))
 	return registrationResult.Token, registrationResult.DeviceID, nil
@@ -146,6 +156,9 @@ func registerCommand(flagArguments []string) int {
 	if storeErr := storeDeviceIdentity(stateDir, registrationResult.Token, registrationResult.DeviceID); storeErr != nil {
 		fmt.Fprintf(os.Stderr, "保存身份失败: %v\n", storeErr)
 		return 1
+	}
+	if persistErr := persistServerURL(stateDir, *serverURL); persistErr != nil {
+		fmt.Fprintf(os.Stderr, "警告：服务端地址写盘失败（run/常驻服务时需设 A3_SERVER_URL）: %v\n", persistErr)
 	}
 	fmt.Printf("✅ 注册成功\ndevice_id = %s\ntoken     = %s（已保存至 %s）\n",
 		registrationResult.DeviceID, registrationResult.Token,

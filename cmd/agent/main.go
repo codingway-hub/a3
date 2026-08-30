@@ -47,6 +47,12 @@ func runAgentCLI(arguments []string) int {
 		return uninstallHookCommand(arguments[1:])
 	case "register":
 		return registerCommand(arguments[1:])
+	case "install-service":
+		return installServiceCommand(arguments[1:])
+	case "uninstall-service":
+		return uninstallServiceCommand(arguments[1:])
+	case "service-status":
+		return serviceStatusCommand(arguments[1:])
 	case "version":
 		fmt.Printf("a3-agent %s\n", agentVersion)
 		return 0
@@ -108,6 +114,9 @@ func printUsage(output *os.File) {
   a3-agent install-hook [[--plugin] 插件]...   安装前置 Hook 到宿主配置（缺省 claude-code）
   a3-agent uninstall-hook [[--plugin] 插件]... 卸载前置 Hook（无参清理全部 a3 项）
   a3-agent register --server URL    注册设备并保存 Token
+  a3-agent install-service          安装常驻服务（macOS launchd / Linux systemd，开机自启）
+  a3-agent uninstall-service        移除常驻服务
+  a3-agent service-status           查看常驻服务状态
   a3-agent version                  版本
 
 run 常用 flags:

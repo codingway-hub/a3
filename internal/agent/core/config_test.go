@@ -2,6 +2,8 @@ package core
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -178,4 +180,41 @@ func TestNewLoggerLevelMapping(t *testing.T) {
 
 	warnLogger := NewLogger(Config{LogLevel: "warn"}) // 未知名回退 info
 	assert.False(t, warnLogger.Enabled(nil, slog.LevelInfo))
+}
+
+func TestServerURLFallbackToPersistedFile(t *testing.T) {
+	sandboxHome := t.TempDir()
+	stateDir := filepath.Join(sandboxHome, ".a3")
+	require.NoError(t, os.MkdirAll(stateDir, 0700))
+
+	// 文件缺失：回退结果为空，由 Validate 报 server_url 缺失
+	config := Default(sandboxHome)
+	config.ApplyEnv(func(string) string { return "" })
+	assert.Empty(t, config.ServerURL, "无环境变量且未持久化时不应有地址")
+	assert.Error(t, config.Validate())
+
+	// 文件存在：env 为空时回退读取；env 非空时 env 优先
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "server-url"),
+		[]byte("http://a3.example.com:8080\n"), 0600))
+	fallbackConfig := Default(sandboxHome)
+	fallbackConfig.ApplyEnv(func(string) string { return "" })
+	assert.Equal(t, "http://a3.example.com:8080", fallbackConfig.ServerURL, "应回退读持久化文件并去空白")
+	require.NoError(t, fallbackConfig.Validate())
+
+	envPriorityConfig := Default(sandboxHome)
+	envPriorityConfig.ApplyEnv(func(envName string) string {
+		if envName == "A3_SERVER_URL" {
+			return "http://env-override:9999"
+		}
+		return ""
+	})
+	assert.Equal(t, "http://env-override:9999", envPriorityConfig.ServerURL, "环境变量优先于持久化文件")
+}
+
+func TestLoadPersistedServerURL(t *testing.T) {
+	assert.Empty(t, LoadPersistedServerURL(t.TempDir()), "缺失文件返回空")
+
+	stateDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "server-url"), []byte("  http://host:1 \n"), 0600))
+	assert.Equal(t, "http://host:1", LoadPersistedServerURL(stateDir), "应 trim 首尾空白")
 }
