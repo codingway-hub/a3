@@ -1,6 +1,8 @@
 package config
 
 import (
+	"github.com/stretchr/testify/assert"
+
 	"strings"
 	"testing"
 )
@@ -76,5 +78,62 @@ func TestLoadRejectsInvalidAutoRegister(t *testing.T) {
 	t.Setenv("A3_ALLOW_AUTO_REGISTER", "not-a-bool")
 	if _, err := Load(); err == nil {
 		t.Fatal("非法 A3_ALLOW_AUTO_REGISTER 应报错")
+	}
+}
+
+func TestLoadNotifyWebhookValidation(t *testing.T) {
+	testCases := []struct {
+		name        string
+		webhookURL  string
+		format      string
+		minSeverity string
+		expectError bool
+	}{
+		{"全空=禁用且合法", "", "", "", false},
+		{"合法 URL 默认格式", "https://hooks.example.com/xyz", "", "", false},
+		{"wecom 格式合法", "http://127.0.0.1:9999/hook", "wecom", "", false},
+		{"feishu 格式合法", "http://127.0.0.1:9999/hook", "feishu", "", false},
+		{"dingtalk 格式合法", "http://127.0.0.1:9999/hook", "dingtalk", "medium", false},
+		{"非法 scheme 拒绝", "ftp://hooks.example.com", "", "", true},
+		{"缺 host 拒绝", "http://", "", "", true},
+		{"非 URL 拒绝", "::not-a-url::", "", "", true},
+		{"未知 format 拒绝", "http://h.example.com", "slack-legacy", "", true},
+		{"未知 severity 拒绝", "http://h.example.com", "", "critical", true},
+		{"severity 大写归一合法", "http://h.example.com", "", "HIGH", false},
+	}
+	for _, testCase := range testCases {
+		unsetCoreEnv(t)
+		t.Setenv("A3_NOTIFY_WEBHOOK_URL", testCase.webhookURL)
+		t.Setenv("A3_NOTIFY_WEBHOOK_FORMAT", testCase.format)
+		t.Setenv("A3_NOTIFY_MIN_SEVERITY", testCase.minSeverity)
+		loadedConfig, err := Load()
+		if testCase.expectError && err == nil {
+			t.Errorf("%s: 应拒绝启动", testCase.name)
+		}
+		if !testCase.expectError && err != nil {
+			t.Errorf("%s: 意外失败: %v", testCase.name, err)
+		}
+		if !testCase.expectError && err == nil && testCase.format == "" {
+			if loadedConfig.NotifyWebhookFormat != "generic" {
+				t.Errorf("%s: 空 format 应回退 generic，得到 %q", testCase.name, loadedConfig.NotifyWebhookFormat)
+			}
+		}
+	}
+}
+
+func TestNotifySeveritiesExpansion(t *testing.T) {
+	testCases := []struct {
+		minSeverity    string
+		expectedSevs   []string
+	}{
+		{"", []string{"low", "medium", "high"}},
+		{"low", []string{"low", "medium", "high"}},
+		{"medium", []string{"medium", "high"}},
+		{"high", []string{"high"}},
+	}
+	for _, testCase := range testCases {
+		severityConfig := &Config{NotifyMinSeverity: testCase.minSeverity}
+		assert.ElementsMatch(t, testCase.expectedSevs, severityConfig.NotifySeverities(),
+			"min_severity=%q 展开错误", testCase.minSeverity)
 	}
 }
