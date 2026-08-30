@@ -1,0 +1,60 @@
+internal/server/api/console_devices.go
+  s_8301e3490dd7cb::t_d2d0d2cbe49c72 5,10-11
+  s_8301e3490dd7cb::t_b044c93cf2fc78 49-76
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_660a42b13e810f 83
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_1e39d9d79b9a97 146-148,161-163
+internal/server/ingest/service_test.go
+  s_8301e3490dd7cb::t_52c336530a052a 35
+  s_8301e3490dd7cb::t_65cc4e9a0d9e14 140
+  s_8301e3490dd7cb::t_09d2aece194fed 58,63-77,80,85,93,97-132
+  s_8301e3490dd7cb::t_c86cf0857d91af 133-134
+internal/server/ingest/handler.go
+  s_8301e3490dd7cb::t_f28a7d85d92148 10
+  s_8301e3490dd7cb::t_71698b9c3c3cbb 35-36,43-44,50-53
+internal/server/store/devices.go
+  s_8301e3490dd7cb::t_c5f459737f4742 131
+  s_8301e3490dd7cb::t_feb5d626b72651 141-147
+  s_8301e3490dd7cb::t_d2efd77153b0da 217-230
+  s_8301e3490dd7cb::t_bc831bd4282063 5,10
+  s_8301e3490dd7cb::t_54c2d7bdfc9b8a 31-39
+  s_8301e3490dd7cb::t_2717d8eed82fa6 58-130,132-140,148-156
+  s_8301e3490dd7cb::t_e1ab9500fc49a7 41-42,47
+internal/server/auth/middleware_test.go
+  s_8301e3490dd7cb::t_5632a7c2263f2b 127-156
+internal/server/api/console_test.go
+  s_8301e3490dd7cb::t_acd831dcdd378d 269-307
+web/src/api/console.js
+  s_8301e3490dd7cb::t_bb126af5fe18bc 48-52
+web/src/views/DevicesView.vue
+  s_8301e3490dd7cb::t_c7804b603bd094 22-28,35-47,54,56,67,71,75-106
+internal/server/ingest/service.go
+  s_8301e3490dd7cb::t_6dd56298744c96 79-82,103-110,112
+internal/server/auth/middleware.go
+  s_8301e3490dd7cb::t_b765134c6bce95 92-101
+  s_8301e3490dd7cb::t_185c0263bf8850 19-20,33-34
+  s_8301e3490dd7cb::t_47b044c93da59f 35-36
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_625ea258b518b7 12
+  s_8301e3490dd7cb::t_65be2a5fe5e98b 125-126,130,132-142
+  s_8301e3490dd7cb::t_9e501545cc18ec 71-72,76,78-83
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_ab923eef81de38 137-144,154,159,162-171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "66b92661ca25b8e104a9260cb9282ac7a286fa10",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
