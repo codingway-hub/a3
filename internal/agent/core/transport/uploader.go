@@ -184,13 +184,9 @@ func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceI
 // 不可重试错误原样返回 NonRetryableError 交调用方决策（如入 spool 或丢弃）。
 func (uploader *Uploader) PostBatch(ctx context.Context, events []schema.Event) (BatchResult, error) {
 	var batchResult BatchResult
-	requestBody, marshalErr := json.Marshal(batchEnvelope{
-		AgentVersion: uploader.agentVersion,
-		Plugins:      uploader.plugins,
-		Events:       events,
-	})
+	requestBody, marshalErr := uploader.marshalEnvelope(events)
 	if marshalErr != nil {
-		return batchResult, fmt.Errorf("序列化事件批次失败: %w", marshalErr)
+		return batchResult, marshalErr
 	}
 
 	backoffDuration := uploader.retryInitial
@@ -228,6 +224,30 @@ func (uploader *Uploader) PostBatch(ctx context.Context, events []schema.Event) 
 	}
 }
 
+// PostBatchOnce 单次尝试上报（不做内部退避重试）：供本地缓存重放路径使用——
+// 重放循环按失败分类自行决定退避节奏，PostBatch 的无限重试会阻塞断网/持续拒绝
+// 场景下的重放调度。可重试类错误（网络/5xx/429）与明确拒绝均原样返回交调用方分流。
+func (uploader *Uploader) PostBatchOnce(ctx context.Context, events []schema.Event) (BatchResult, error) {
+	requestBody, marshalErr := uploader.marshalEnvelope(events)
+	if marshalErr != nil {
+		return BatchResult{}, marshalErr
+	}
+	return uploader.attemptOnce(ctx, requestBody)
+}
+
+// marshalEnvelope 序列化上报信封。
+func (uploader *Uploader) marshalEnvelope(events []schema.Event) ([]byte, error) {
+	requestBody, marshalErr := json.Marshal(batchEnvelope{
+		AgentVersion: uploader.agentVersion,
+		Plugins:      uploader.plugins,
+		Events:       events,
+	})
+	if marshalErr != nil {
+		return nil, fmt.Errorf("序列化事件批次失败: %w", marshalErr)
+	}
+	return requestBody, nil
+}
+
 // attemptOnce 执行单次上报尝试；返回 (结果, nil) 成功、(零值, nil) 不可能、(零值, err) 失败，
 // 其中 *NonRetryableError 表示服务端明确拒绝不应再重试，其余错误视为可重试。
 func (uploader *Uploader) attemptOnce(ctx context.Context, requestBody []byte) (BatchResult, error) {
@@ -257,10 +277,11 @@ func (uploader *Uploader) attemptOnce(ctx context.Context, requestBody []byte) (
 			return batchResult, fmt.Errorf("解析上报响应失败: %w", unmarshalErr)
 		}
 		return batchResult, nil
-	case response.StatusCode >= 500:
+	case response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500:
+		// 429 限流与 5xx 同理属瞬时状态：重试有戏，交给退避
 		return batchResult, fmt.Errorf("服务端暂时不可用(状态码 %d): %s", response.StatusCode, string(responseBytes))
 	default:
-		// 其余 4xx：鉴权失效、批次非法等，重试只会重复失败
+		// 其余 4xx：鉴权失效、批次非法等，重试只会重复失败；Status 保留供下游分流
 		return batchResult, &NonRetryableError{StatusCode: response.StatusCode, Detail: string(responseBytes)}
 	}
 }

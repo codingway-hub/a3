@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -98,6 +99,45 @@ func TestPostBatchGivesUpImmediatelyOn401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, nonRetryableErr.StatusCode)
 	assert.Contains(t, nonRetryableErr.Detail, "设备令牌无效")
 	assert.EqualValues(t, 1, attemptCount.Load(), "不可重试错误不得触发第二次尝试")
+}
+
+func TestPostBatchRetriesOn429(t *testing.T) {
+	var attemptCount atomic.Int32
+
+	fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if attemptCount.Add(1) <= 2 {
+			http.Error(responseWriter, `{"error":"限流"}`, http.StatusTooManyRequests)
+			return
+		}
+		_, _ = responseWriter.Write([]byte(`{"accepted":1,"duplicates":0}`))
+	}))
+	defer fakeServer.Close()
+
+	testUploader := newTestUploader(t, fakeServer.URL)
+	batchResult, postErr := testUploader.PostBatch(context.Background(), []schema.Event{sampleEvent("evt-429")})
+	require.NoError(t, postErr)
+	assert.EqualValues(t, 3, attemptCount.Load(), "429 应归可重试分支按退避重试")
+	assert.Equal(t, 1, batchResult.Accepted)
+}
+
+// TestPostBatchOnceSingleShotNoInternalRetry 钉住单次尝试语义：
+// 重放路径以 PostBatchOnce 单发，429/5xx 也立即返回，退避节奏交重放循环裁决。
+func TestPostBatchOnceSingleShotNoInternalRetry(t *testing.T) {
+	var attemptCount atomic.Int32
+
+	fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		attemptCount.Add(1)
+		http.Error(responseWriter, "busy", http.StatusServiceUnavailable)
+	}))
+	defer fakeServer.Close()
+
+	testUploader := newTestUploader(t, fakeServer.URL)
+	_, onceErr := testUploader.PostBatchOnce(context.Background(), []schema.Event{sampleEvent("evt-once")})
+	require.Error(t, onceErr)
+	assert.EqualValues(t, 1, attemptCount.Load(), "PostBatchOnce 不做内部退避重试")
+
+	var nonRetryableErr *NonRetryableError
+	assert.False(t, errors.As(onceErr, &nonRetryableErr), "5xx 在单次尝试下仍属可重试")
 }
 
 func TestPostBatchContextCancelDuringBackoff(t *testing.T) {

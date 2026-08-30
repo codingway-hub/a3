@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -26,6 +28,13 @@ const (
 	eventChannelCapacity  = 4096
 	spoolReplayEvery      = 30 * time.Second
 	batchUploadCtxTimeout = 60 * time.Second
+
+	// 重放退避双档：瞬时可重试（网络/5xx/429）短退避；鉴权失效等（401/403/其余 4xx）
+	// 放回后长退避，绝不以烧库换取速度。
+	replayBackoffFastInitial = 1 * time.Second
+	replayBackoffFastCap     = 60 * time.Second
+	replayBackoffSlowInitial = 1 * time.Minute
+	replayBackoffSlowCap     = 30 * time.Minute
 )
 
 // runCommand 常驻采集主循环：watcher → ParseLine → 脱敏 → 批量化 → 上报；失败入 spool 后台重放。
@@ -231,16 +240,23 @@ func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 		case uploadErr == nil:
 			logger.Debug("批次上报成功",
 				slog.Int("accepted", uploadResult.Accepted), slog.Int("duplicates", uploadResult.Duplicates))
-		case isNonRetryable(uploadErr):
-			logger.Error("服务端拒绝批次(丢弃)", slog.String("error", uploadErr.Error()))
 		default:
+			// 可重试失败与明确拒绝（鉴权失效/批次非法）一概入 spool：重放循环按状态码
+			// 分类处置（401/403 放回+长退避、400/422 归档），实时链路绝不再烧库——
+			// 证据一律先落盘、后裁决
+			failureKind := "上报失败"
+			if isNonRetryable(uploadErr) {
+				failureKind = "服务端明确拒绝"
+			}
 			if enqueueErr := spoolQueue.Enqueue(envelopeBytes); enqueueErr != nil {
 				logger.Error("批次落盘缓存失败(丢弃)", slog.String("error", enqueueErr.Error()))
 			} else if finalFlush {
 				logger.Info("退出前未完成批次已入本地缓存，恢复后将自动续传",
 					slog.Int("events", len(pendingEvents)))
 			} else {
-				logger.Warn("上报暂不可用，批次已入本地缓存", slog.Int("events", len(pendingEvents)))
+				logger.Warn(failureKind+"，批次已入本地缓存，由重放循环分类续传",
+					slog.String("error", uploadErr.Error()),
+					slog.Int("events", len(pendingEvents)))
 			}
 		}
 		pendingEvents = pendingEvents[:0]
@@ -263,15 +279,79 @@ func batchingLoop(runCtx context.Context, eventChannel <-chan schema.Event,
 	}
 }
 
-// spoolReplayLoop 断网缓存重放：周期性取最旧批次尝试续传。批次以在途租约持有，
-// 上报成功（或判定不可重试）后 Commit；可重试失败把内容重新排队到队尾再提交
-// 旧租约——两步之间崩溃至多多送一次，由服务端按 event_id 幂等兜底；
-// 若放回失败则不提交租约，在途文件留存待下次启动归位。
+// replayOutcome 是本地缓存单批次的分类处置建议；对应动作由重放循环执行。
+type replayOutcome int
+
+const (
+	// replayCommit 上报成功：删除在途租约。
+	replayCommit replayOutcome = iota
+	// replayQuarantine 证据归档（解码损坏 / 400/422 明确拒绝）：移入隔离区留证。
+	replayQuarantine
+	// replayRetryFast 瞬时可重试（网络/5xx/429）：放回队列 + 短退避。
+	replayRetryFast
+	// replayRetrySlow 鉴权失效（401/403）及其余 4xx：放回队列 + 长退避，绝不烧库。
+	replayRetrySlow
+)
+
+// replaySingleBatch 对单个在途批次做一次分类处置，返回建议动作。
+// 解码失败与 400/422 在此处直接归档（原因随文件名留痕）；成功与可恢复失败只判定
+// 不执行——Commit/Restore 及退避节奏由 spoolReplayLoop 统一驱动，便于回归测试
+// 直接校验单批次的分流决策。返回 error 属硬故障（如归档失败），调用方应保留在途
+// 租约让重启回收，不得误判为成功烧掉证据。
+func replaySingleBatch(ctx context.Context, uploaderClient *transport.Uploader,
+	deviceID string, inflightBatch *spool.Batch) (replayOutcome, error) {
+
+	eventsToReplay, unmarshalErr := decodeEnvelopeFillDevice(inflightBatch.Payload, deviceID)
+	if unmarshalErr != nil {
+		// 解码失败属证据损坏：归档留证（不阻塞后续批次，也不再重复解码）
+		if quarantineErr := inflightBatch.Quarantine("corrupt"); quarantineErr != nil {
+			return replayQuarantine, quarantineErr
+		}
+		return replayQuarantine, nil
+	}
+
+	replayCtx, cancelReplay := context.WithTimeout(ctx, batchUploadCtxTimeout)
+	_, replayErr := uploaderClient.PostBatchOnce(replayCtx, eventsToReplay)
+	cancelReplay()
+	if replayErr == nil {
+		return replayCommit, nil
+	}
+
+	var nonRetryableErr *transport.NonRetryableError
+	if !errors.As(replayErr, &nonRetryableErr) {
+		return replayRetryFast, nil // 网络/5xx/429：瞬时状态，短退避后重试
+	}
+	switch nonRetryableErr.StatusCode {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		// 载荷永久非法（字段缺失/越界）：重试必然复败，归档留证继续
+		if quarantineErr := inflightBatch.Quarantine("reject-" + strconv.Itoa(nonRetryableErr.StatusCode)); quarantineErr != nil {
+			return replayQuarantine, quarantineErr
+		}
+		return replayQuarantine, nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		// 鉴权失效（设备吊销/令牌轮换中）：证据绝不能烧，放回长退避，恢复后由 run 续传
+		return replayRetrySlow, nil
+	default:
+		// 其余 4xx 保守处理：放回 + 长退避，不因未预期状态码丢证据
+		return replayRetrySlow, nil
+	}
+}
+
+// spoolReplayLoop 断网缓存重放：周期性取最旧批次尝试续传，按 replaySingleBatch
+// 的分类处置——
+//
+//   - replayCommit：删除在途租约（至少一次，服务端按 event_id 幂等兜底）；
+//   - replayQuarantine：已在 replaySingleBatch 内归档，重置退避继续；
+//   - replayRetryFast：Restore 放回原队 + 短退避（1s→60s）；
+//   - replayRetrySlow：Restore 放回原队 + 长退避（1min→30min），鉴权失效绝不烧库。
+//
+// Restore 放回与重试之间若进程崩溃，在途文件留存，下次启动归位重新排队。
 func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClient *transport.Uploader,
 	deviceID string, logger *slog.Logger, doneChan chan<- struct{}) {
 	defer close(doneChan)
 
-	backoffDuration := spoolReplayEvery
+	fastBackoff := replayBackoffFastInitial
+	slowBackoff := replayBackoffSlowInitial
 	for {
 		inflightBatch, dequeueErr := spoolQueue.Dequeue()
 		if errors.Is(dequeueErr, spool.ErrEmpty) {
@@ -283,7 +363,8 @@ func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClien
 				return
 			case <-sleepTimer.C:
 			}
-			backoffDuration = spoolReplayEvery
+			fastBackoff = replayBackoffFastInitial
+			slowBackoff = replayBackoffSlowInitial
 			continue
 		} else if dequeueErr != nil {
 			logger.Warn("读取本地缓存失败", slog.String("error", dequeueErr.Error()))
@@ -291,49 +372,61 @@ func spoolReplayLoop(ctx context.Context, spoolQueue *spool.Spool, uploaderClien
 			continue
 		}
 
-		eventsToReplay, unmarshalErr := decodeEnvelopeFillDevice(inflightBatch.Payload, deviceID)
-		if unmarshalErr != nil {
-			logger.Warn("缓存批次损坏(丢弃)", slog.String("error", unmarshalErr.Error()))
-			if commitErr := inflightBatch.Commit(); commitErr != nil {
-				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
-			}
+		decision, classifyErr := replaySingleBatch(ctx, uploaderClient, deviceID, inflightBatch)
+		if classifyErr != nil {
+			// 归档等硬故障：保留在途租约，重启自动归位重试；不误判成功
+			logger.Error("缓存批次分类处置失败(保留在途)", slog.String("error", classifyErr.Error()))
+			time.Sleep(time.Second)
 			continue
 		}
-
-		replayCtx, cancelReplay := context.WithTimeout(ctx, batchUploadCtxTimeout)
-		replayResult, replayErr := uploaderClient.PostBatch(replayCtx, eventsToReplay)
-		cancelReplay()
-		switch {
-		case replayErr == nil:
-			logger.Info("本地缓存续传成功", slog.Int("accepted", replayResult.Accepted))
+		switch decision {
+		case replayCommit:
+			logger.Info("本地缓存续传成功")
 			if commitErr := inflightBatch.Commit(); commitErr != nil {
 				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
 			}
-			backoffDuration = spoolReplayEvery
-		case isNonRetryable(replayErr):
-			logger.Error("服务端拒绝缓存批次(丢弃)", slog.String("error", replayErr.Error()))
-			if commitErr := inflightBatch.Commit(); commitErr != nil {
-				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
+			fastBackoff = replayBackoffFastInitial
+			slowBackoff = replayBackoffSlowInitial
+		case replayQuarantine:
+			logger.Warn("缓存批次已归档(证据保留)")
+			fastBackoff = replayBackoffFastInitial
+			slowBackoff = replayBackoffSlowInitial
+		case replayRetryFast:
+			logger.Warn("本地缓存续传暂不可用，批次放回待短退避重试")
+			if restoreErr := inflightBatch.Restore(); restoreErr != nil {
+				logger.Error("缓存批次放回失败(保留在途待重启回收重试)", slog.String("error", restoreErr.Error()))
+				continue
 			}
-		default:
-			if requeueErr := spoolQueue.Enqueue(inflightBatch.Payload); requeueErr != nil {
-				logger.Error("缓存批次放回失败(保留在途待重启回收重试)", slog.String("error", requeueErr.Error()))
-			} else if commitErr := inflightBatch.Commit(); commitErr != nil {
-				logger.Warn("缓存批次确认失败(重启后可能重复续传)", slog.String("error", commitErr.Error()))
-			}
-			sleepTimer := time.NewTimer(backoffDuration)
-			select {
-			case <-ctx.Done():
-				sleepTimer.Stop()
+			if !sleepAndGrow(ctx, &fastBackoff, replayBackoffFastCap) {
 				return
-			case <-sleepTimer.C:
 			}
-			backoffDuration *= 2
-			if backoffDuration > 10*time.Minute {
-				backoffDuration = 10 * time.Minute
+		case replayRetrySlow:
+			logger.Warn("服务端拒绝缓存批次(鉴权/其他 4xx)，放回绝不烧库，长退避后重试")
+			if restoreErr := inflightBatch.Restore(); restoreErr != nil {
+				logger.Error("缓存批次放回失败(保留在途待重启回收重试)", slog.String("error", restoreErr.Error()))
+				continue
+			}
+			if !sleepAndGrow(ctx, &slowBackoff, replayBackoffSlowCap) {
+				return
 			}
 		}
 	}
+}
+
+// sleepAndGrow 等待退避后翻倍时长（封顶）。返回 false 表示上下文已取消，调用方应退出。
+func sleepAndGrow(ctx context.Context, backoff *time.Duration, capDuration time.Duration) bool {
+	wakeTimer := time.NewTimer(*backoff)
+	defer wakeTimer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-wakeTimer.C:
+	}
+	*backoff *= 2
+	if *backoff > capDuration {
+		*backoff = capDuration
+	}
+	return true
 }
 
 // decodeEnvelopeFillDevice 解码缓存信封并把缺失 DeviceID 补为本机身份。
