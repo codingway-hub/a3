@@ -1,0 +1,31 @@
+internal/server/store/alerts_notify_test.go
+  s_8301e3490dd7cb::t_724a46e82f48c0 1-72,74,76-81
+  s_8301e3490dd7cb::t_602ced2cfec026 73,75
+migrations/0009_alerts_notify.up.sql
+  s_8301e3490dd7cb::t_07dcd3bf41dd3c 1-16
+internal/server/store/alerts_notify.go
+  s_8301e3490dd7cb::t_b2085cd1890ee5 1-27,29-30,32-40
+  s_8301e3490dd7cb::t_5b0653b2134d84 28,31
+internal/server/store/alerts.go
+  s_8301e3490dd7cb::t_08c98976909e73 26-27
+  s_8301e3490dd7cb::t_d82a6a7a7e46c1 66
+  s_8301e3490dd7cb::t_22089f906b04f1 148-149
+migrations/0009_alerts_notify.down.sql
+  s_8301e3490dd7cb::t_caba07ed3f7efe 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a3cab2182450fc8476336164a0e5655300517089",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
