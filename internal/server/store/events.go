@@ -23,7 +23,8 @@ type EventRow struct {
 
 // InsertEvents 批量写入事件，返回与入参等长的接受标记数组（true=本次新插入）。
 //
-// 以 event_id 为主键做 ON CONFLICT DO NOTHING：重复上报（终端重试/断网重放）标记为 false。
+// 以 (device_id, event_id) 复合主键做 ON CONFLICT DO NOTHING：设备内重复上报
+// （终端重试/断网重放）标记为 false；跨设备同 event_id 各自落库，互不吞并。
 // 整批包裹在一个事务里——中途失败全部回滚，调用方整批重试即可（幂等安全）。
 func (store *Store) InsertEvents(ctx context.Context, rows []EventRow) (acceptedFlags []bool, err error) {
 	if len(rows) == 0 {
@@ -45,7 +46,7 @@ func (store *Store) InsertEvents(ctx context.Context, rows []EventRow) (accepted
 		scanErr := tx.QueryRow(ctx,
 			`INSERT INTO events (event_id, device_id, session_key, agent_type, event_type, role, occurred_at, payload, risk_tags)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			 ON CONFLICT (event_id) DO NOTHING
+			 ON CONFLICT (device_id, event_id) DO NOTHING
 			 RETURNING event_id`,
 			row.EventID, row.DeviceID, row.SessionKey, row.AgentType, row.EventType, row.Role,
 			row.OccurredAt, row.PayloadJSON, row.RiskTagsJSON,
@@ -57,6 +58,65 @@ func (store *Store) InsertEvents(ctx context.Context, rows []EventRow) (accepted
 			return nil, scanErr
 		}
 		acceptedFlags[rowIndex] = true
+	}
+	return acceptedFlags, tx.Commit(ctx)
+}
+
+// InsertEventBatchAndAggregateSessions 单事务内完成事件插入与会话计数聚合：
+// 逐条 INSERT（复合键 ON CONFLICT DO NOTHING），仅对实际接受的行累加会话计数，
+// 再以 sessionMetas 提供的 agent_type/title/时间戳 upsert 会话（title 仅空时补、
+// ended_at 取较大；接受数为 0 的会话跳过）。
+//
+// 事件落库与会话计数同生共死：任一环节失败整批回滚，根除原先 InsertEvents 与
+// UpsertSession 分离事务造成的计数永久漂移。accepted 返回给上层做异步风险扫描。
+func (store *Store) InsertEventBatchAndAggregateSessions(ctx context.Context,
+	rows []EventRow, sessionMetas []SessionUpdate) (acceptedFlags []bool, err error) {
+
+	if len(rows) == 0 {
+		return []bool{}, nil
+	}
+	tx, beginErr := store.pool.Begin(ctx)
+	if beginErr != nil {
+		return nil, beginErr
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			err = errors.Join(err, rollbackErr)
+		}
+	}()
+
+	acceptedFlags = make([]bool, len(rows))
+	acceptedBySession := map[string]int{}
+	for rowIndex, row := range rows {
+		insertedID := ""
+		scanErr := tx.QueryRow(ctx,
+			`INSERT INTO events (event_id, device_id, session_key, agent_type, event_type, role, occurred_at, payload, risk_tags)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 ON CONFLICT (device_id, event_id) DO NOTHING
+			 RETURNING event_id`,
+			row.EventID, row.DeviceID, row.SessionKey, row.AgentType, row.EventType, row.Role,
+			row.OccurredAt, row.PayloadJSON, row.RiskTagsJSON,
+		).Scan(&insertedID)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			continue // 冲突去重，不计入 accepted
+		}
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		acceptedFlags[rowIndex] = true
+		acceptedBySession[row.SessionKey]++
+	}
+
+	for _, sessionMeta := range sessionMetas {
+		delta := acceptedBySession[sessionMeta.SessionKey]
+		if delta == 0 {
+			continue
+		}
+		if _, upsertErr := tx.Exec(ctx, upsertSessionSQL,
+			sessionMeta.DeviceID, sessionMeta.SessionKey, sessionMeta.AgentType,
+			sessionMeta.Title, sessionMeta.LastOccurredAt, delta, 0); upsertErr != nil {
+			return nil, upsertErr
+		}
 	}
 	return acceptedFlags, tx.Commit(ctx)
 }

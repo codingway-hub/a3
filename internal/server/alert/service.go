@@ -181,6 +181,7 @@ func (service *Service) processEvent(ctx context.Context, event schema.Event) er
 	}
 
 	applied, applyErr := service.eventStore.ApplyScanOutcome(ctx, store.ScanOutcome{
+		DeviceID:     event.DeviceID,
 		EventID:      event.EventID,
 		RiskTagsJSON: riskTagsJSON,
 		Alerts:       alertsToCreate,

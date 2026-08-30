@@ -35,19 +35,41 @@ type SessionUpdate struct {
 	RiskCountDelta  int
 }
 
+// upsertSessionSQL 会话 upsert 增量聚合（计数累加、ended_at 取较大、title 仅空时补）。
+// 供单条路径（UpsertSession）与同事务批路径（InsertEventBatchAndAggregateSessions）复用。
+const upsertSessionSQL = `
+	INSERT INTO sessions (device_id, session_key, agent_type, title, started_at, ended_at, event_count, risk_count)
+	 VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
+	 ON CONFLICT (device_id, session_key) DO UPDATE SET
+	   event_count = sessions.event_count + EXCLUDED.event_count,
+	   risk_count  = sessions.risk_count  + EXCLUDED.risk_count,
+	   ended_at    = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
+	   title       = CASE WHEN sessions.title = '' AND EXCLUDED.title <> '' THEN EXCLUDED.title ELSE sessions.title END`
+
 // UpsertSession 以单条 upsert 原子完成会话创建或增量聚合：
 // 计数累加、ended_at 取较大值、title 仅在现值为空且新值非空时补写。
 func (store *Store) UpsertSession(ctx context.Context, update SessionUpdate) error {
-	_, err := store.pool.Exec(ctx,
-		`INSERT INTO sessions (device_id, session_key, agent_type, title, started_at, ended_at, event_count, risk_count)
-		 VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
-		 ON CONFLICT (device_id, session_key) DO UPDATE SET
-		   event_count = sessions.event_count + EXCLUDED.event_count,
-		   risk_count  = sessions.risk_count  + EXCLUDED.risk_count,
-		   ended_at    = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
-		   title       = CASE WHEN sessions.title = '' AND EXCLUDED.title <> '' THEN EXCLUDED.title ELSE sessions.title END`,
+	_, err := store.pool.Exec(ctx, upsertSessionSQL,
 		update.DeviceID, update.SessionKey, update.AgentType, update.Title,
 		update.LastOccurredAt, update.EventCountDelta, update.RiskCountDelta)
+	return err
+}
+
+// RebuildSessionEventCounts 从 events 全量重算每个会话的事件计数与时间窗，逐行
+// upsert 修正历史漂移（事件先落库、计数补充失败的场景）。title 与 risk_count 不覆盖
+// （标题留人工/批内补写语义，风险计数由扫描链路逐步累加）。
+// 供服务端启动时（监听前）对账调用，之后与告警链路按需增量并存。
+func (store *Store) RebuildSessionEventCounts(ctx context.Context) error {
+	_, err := store.pool.Exec(ctx,
+		`INSERT INTO sessions (device_id, session_key, agent_type, started_at, ended_at, event_count)
+		 SELECT event.device_id, event.session_key, event.agent_type,
+		        min(event.occurred_at), max(event.occurred_at), count(*)
+		   FROM events AS event
+		  GROUP BY event.device_id, event.session_key, event.agent_type
+		 ON CONFLICT (device_id, session_key) DO UPDATE SET
+		   event_count = EXCLUDED.event_count,
+		   started_at  = LEAST(sessions.started_at, EXCLUDED.started_at),
+		   ended_at    = GREATEST(sessions.ended_at, EXCLUDED.ended_at)`)
 	return err
 }
 

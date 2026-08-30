@@ -127,8 +127,16 @@ func setupStore(ctx context.Context, databaseURL string, logger *slog.Logger) (*
 		return nil, nil, migrateErr
 	}
 
-	logger.Info("数据库迁移完成", "database", maskDatabaseURL(databaseURL))
-	return store.NewStore(pool), pool.Close, nil
+	// 监听前对账：全量重算会话 event_count。历史批次落库但计数补充失败会留下
+	// 永久漂移，启动时据此自愈（title/risk_count 不覆盖，与后续增量并存）。
+	eventStore := store.NewStore(pool)
+	if rebuildErr := eventStore.RebuildSessionEventCounts(ctx); rebuildErr != nil {
+		pool.Close()
+		return nil, nil, rebuildErr
+	}
+
+	logger.Info("数据库迁移与会话计数对账完成", "database", maskDatabaseURL(databaseURL))
+	return eventStore, pool.Close, nil
 }
 
 // buildServeCall 决定监听方式：证书与私钥齐备时走 HTTPS，否则明文 HTTP。

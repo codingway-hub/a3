@@ -142,22 +142,24 @@ func (service *Service) SubmitEvents(ctx context.Context, device *store.Device, 
 	}
 
 	acceptedRows := make([]store.EventRow, 0, len(envelope.Events))
+	sessionMetas := buildSessionMetas(device.DeviceID, envelope.Events)
 	for eventIndex := range envelope.Events {
 		acceptedRows = append(acceptedRows, toEventRow(envelope.Events[eventIndex]))
 	}
-	acceptedFlags, insertErr := service.eventStore.InsertEvents(ctx, acceptedRows)
+	// 事件落库与会话计数同一事务：根除原先 InsertEvents 与 UpsertSession 分离
+	// 事务下聚合失败导致的计数永久漂移；重复事件只计已接受的行。
+	acceptedFlags, insertErr := service.eventStore.InsertEventBatchAndAggregateSessions(ctx, acceptedRows, sessionMetas)
 	if insertErr != nil {
 		return nil, insertErr
 	}
 
-	// 仅对新接受的事件做会话聚合与异步风险扫描；重复事件此前已处理过
+	// 仅对新接受的事件做异步风险扫描；重复事件此前已处理过
 	acceptedEvents := make([]schema.Event, 0, len(envelope.Events))
 	for eventIndex, isAccepted := range acceptedFlags {
 		if isAccepted {
 			acceptedEvents = append(acceptedEvents, envelope.Events[eventIndex])
 		}
 	}
-	service.aggregateSessions(ctx, device.DeviceID, acceptedEvents)
 	for _, acceptedEvent := range acceptedEvents {
 		service.alertService.SubmitAsync(acceptedEvent)
 	}
@@ -168,49 +170,45 @@ func (service *Service) SubmitEvents(ctx context.Context, device *store.Device, 
 	}, nil
 }
 
-// aggregateSessions 按 (device_id, session_key) 聚合本批新增事件计数，
-// 并以批内首条 user 会话文本作为标题候选（仅当会话尚无标题时生效）。
-func (service *Service) aggregateSessions(ctx context.Context, deviceID string, acceptedEvents []schema.Event) {
+// buildSessionMetas 依据本批全部事件预计算会话聚合元信息（标题候选/时间戳/agent_type），
+// 供 InsertEventBatchAndAggregateSessions 在同一事务内仅对接受的行累加计数。
+// 标题取本批首个 user 会话文本（仅当会话标题尚空时由 upsert 补写）；同一会话的
+// 重复事件时间戳取最大，与无重复时的行为一致。
+func buildSessionMetas(deviceID string, events []schema.Event) []store.SessionUpdate {
 	sessionAccumulators := map[string]*sessionAccumulator{}
-	for _, acceptedEvent := range acceptedEvents {
-		accumulator, exists := sessionAccumulators[acceptedEvent.SessionID]
+	order := make([]string, 0, len(events))
+	for _, event := range events {
+		accumulator, exists := sessionAccumulators[event.SessionID]
 		if !exists {
-			accumulator = &sessionAccumulator{
-				agentType:      acceptedEvent.AgentType,
-				lastOccurredAt: acceptedEvent.OccurredAt,
-			}
-			sessionAccumulators[acceptedEvent.SessionID] = accumulator
+			accumulator = &sessionAccumulator{agentType: event.AgentType}
+			sessionAccumulators[event.SessionID] = accumulator
+			order = append(order, event.SessionID)
 		}
-		accumulator.eventCount++
-		if acceptedEvent.OccurredAt.After(accumulator.lastOccurredAt) {
-			accumulator.lastOccurredAt = acceptedEvent.OccurredAt
+		if event.OccurredAt.After(accumulator.lastOccurredAt) {
+			accumulator.lastOccurredAt = event.OccurredAt
 		}
-		if accumulator.titleCandidate == "" && acceptedEvent.EventType == schema.EventTypeConversation &&
-			acceptedEvent.Role == "user" {
-			accumulator.titleCandidate = truncateRunes(acceptedEvent.Content, titleMaxRunes)
+		if accumulator.titleCandidate == "" && event.EventType == schema.EventTypeConversation &&
+			event.Role == "user" {
+			accumulator.titleCandidate = truncateRunes(event.Content, titleMaxRunes)
 		}
 	}
-	for sessionKey, accumulator := range sessionAccumulators {
-		upsertErr := service.eventStore.UpsertSession(ctx, store.SessionUpdate{
-			DeviceID:        deviceID,
-			SessionKey:      sessionKey,
-			AgentType:       accumulator.agentType,
-			Title:           accumulator.titleCandidate,
-			LastOccurredAt:  accumulator.lastOccurredAt,
-			EventCountDelta: accumulator.eventCount,
-			RiskCountDelta:  0,
+	sessionMetas := make([]store.SessionUpdate, 0, len(sessionAccumulators))
+	for _, sessionKey := range order {
+		accumulator := sessionAccumulators[sessionKey]
+		sessionMetas = append(sessionMetas, store.SessionUpdate{
+			DeviceID:       deviceID,
+			SessionKey:     sessionKey,
+			AgentType:      accumulator.agentType,
+			Title:          accumulator.titleCandidate,
+			LastOccurredAt: accumulator.lastOccurredAt,
 		})
-		if upsertErr != nil {
-			// 计数聚合失败不阻断主链路（事件本身已落库）；留待下次上报自然修正
-			continue
-		}
 	}
+	return sessionMetas
 }
 
-// sessionAccumulator 聚合单会话在本批次内的增量。
+// sessionAccumulator 聚合单会话在本批次内的元信息（计数由入库侧按已接受行统计）。
 type sessionAccumulator struct {
 	agentType      string
-	eventCount     int
 	lastOccurredAt time.Time
 	titleCandidate string
 }

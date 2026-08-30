@@ -17,9 +17,10 @@ import (
 
 // ScanOutcome 描述一条事件的完整扫描结果：风险标签 JSON、待落地告警与会话聚合增量。
 type ScanOutcome struct {
-	EventID       string
-	RiskTagsJSON  []byte
-	Alerts        []*Alert
+	DeviceID     string
+	EventID      string
+	RiskTagsJSON []byte
+	Alerts       []*Alert
 	SessionUpdate SessionUpdate
 }
 
@@ -27,6 +28,7 @@ type ScanOutcome struct {
 // 尚未扫描）→ 回写 risk_tags → 落告警 → 会话风险计数，四步同生共死。
 // 返回 applied=false 表示事件已被其他路径抢先处理，本次结果整体放弃。
 //
+// 事件按 (device_id, event_id) 复合键定位：跨设备同 event_id 各自扫描互不污染。
 // SQL 与 UpsertSession/CreateAlert 保持同构；不复用它们是因为这里必须与
 // 条件更新 events 同处一个事务才能保证「要么全部生效、要么全部不发生」。
 func (store *Store) ApplyScanOutcome(ctx context.Context, outcome ScanOutcome) (applied bool, err error) {
@@ -41,8 +43,9 @@ func (store *Store) ApplyScanOutcome(ctx context.Context, outcome ScanOutcome) (
 	}()
 
 	commandTag, execErr := tx.Exec(ctx,
-		`UPDATE events SET risk_tags = $2, scanned_at = now() WHERE event_id = $1 AND scanned_at IS NULL`,
-		outcome.EventID, outcome.RiskTagsJSON)
+		`UPDATE events SET risk_tags = $3, scanned_at = now()
+		  WHERE device_id = $1 AND event_id = $2 AND scanned_at IS NULL`,
+		outcome.DeviceID, outcome.EventID, outcome.RiskTagsJSON)
 	if execErr != nil {
 		return false, execErr
 	}
