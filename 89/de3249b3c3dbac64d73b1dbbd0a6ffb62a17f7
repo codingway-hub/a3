@@ -1,0 +1,45 @@
+internal/server/api/installer/install.sh.tmpl
+  s_8301e3490dd7cb::t_4691e33454643b 1-81
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_23fde89d0cf5a7 87-90,94
+  s_8301e3490dd7cb::t_399065aa50a024 13
+  s_8301e3490dd7cb::t_a067683f9fe64c 29-34,43-45,51-56,65-68
+internal/server/api/install_routes.go
+  s_8301e3490dd7cb::t_1645b8b7158a01 4
+  s_8301e3490dd7cb::t_8ada73e7dd6984 1-3,5-46,48-76
+  s_8301e3490dd7cb::t_da13d83b615155 47
+internal/server/api/installer/installer_test.go
+  s_8301e3490dd7cb::t_0ced69b9b413c1 1-50
+cmd/server/main.go
+  s_8301e3490dd7cb::t_4e40b7470637f7 72-74
+internal/server/config/config.go
+  s_8301e3490dd7cb::t_78cfdf08e96ec7 10
+  s_8301e3490dd7cb::t_9d4c0ab9f7a8be 24-25
+  s_8301e3490dd7cb::t_346aa642fa65cd 37-38
+internal/server/api/install_routes_test.go
+  s_8301e3490dd7cb::t_16fda15ae5748c 1-127
+internal/server/api/installer/installer.go
+  s_8301e3490dd7cb::t_2bc25c8210e658 1-18,23-30,32-33,35-69
+  s_8301e3490dd7cb::t_399065aa50a024 19-22
+  s_8301e3490dd7cb::t_e3d36f7d9d32df 31,34
+internal/server/config/config_test.go
+  s_8301e3490dd7cb::t_399065aa50a024 80
+cmd/server/main_test.go
+  s_8301e3490dd7cb::t_399065aa50a024 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "89de3249b3c3dbac64d73b1dbbd0a6ffb62a17f7",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
