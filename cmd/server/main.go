@@ -18,6 +18,7 @@ import (
 	"github.com/codingway-hub/a3/internal/server/api"
 	"github.com/codingway-hub/a3/internal/server/config"
 	"github.com/codingway-hub/a3/internal/server/ingest"
+	"github.com/codingway-hub/a3/internal/server/notify"
 	"github.com/codingway-hub/a3/internal/server/store"
 )
 
@@ -57,6 +58,16 @@ func main() {
 	serviceCtx, stopService := context.WithCancel(context.Background())
 	defer stopService()
 	go alertService.Run(serviceCtx)
+
+	// 告警通知外送：未配置 webhook 即禁用（照 WebDist 可选装配模式）
+	if serverConfig.NotifyWebhookURL != "" {
+		notifyChannel := notify.NewWebhookChannel(serverConfig.NotifyWebhookURL,
+			serverConfig.NotifyWebhookFormat, nil, logger)
+		notifyWorker := notify.NewWorker(eventStore, notifyChannel, serverConfig.NotifySeverities(), logger)
+		go notifyWorker.Run(serviceCtx)
+		logger.Info("告警通知外送已启用", "format", serverConfig.NotifyWebhookFormat,
+			"min_severity", serverConfig.NotifyMinSeverity)
+	}
 
 	// HTTP 装配
 	adminPasswordHash, hashErr := bcrypt.GenerateFromPassword([]byte(serverConfig.AdminPassword), bcrypt.DefaultCost)

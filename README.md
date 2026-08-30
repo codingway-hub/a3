@@ -112,6 +112,9 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 | `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子管理员；口令留空则随机生成并打印日志 | `admin` / 空(随机) |
 | `A3_JWT_SECRET` | 登录态签名密钥；留空则每次重启随机生成(需重新登录) | 空(随机) |
 | `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册（一键安装自动开启；收齐设备后建议改回关闭） | `false` |
+| `A3_NOTIFY_WEBHOOK_URL` | 告警外送 webhook 地址；空则禁用外送（告警仅落控制台） | 空 |
+| `A3_NOTIFY_WEBHOOK_FORMAT` | webhook 信封格式：`generic`(兼容 Slack)、`wecom`、`dingtalk`、`feishu` | `generic` |
+| `A3_NOTIFY_MIN_SEVERITY` | 外送最低严重级别：`low`(全部)、`medium`、`high` | `low` |
 | `A3_TLS_CERT` / `A3_TLS_KEY` | 可选 HTTPS：同时设置证书与私钥 PEM 路径才走 `ListenAndServeTLS`；仅设其一服务端启动报错 | 空(HTTP) |
 | `A3_WEB_DIST` | 前端静态目录；空则不托管 | 空 |
 
@@ -313,6 +316,11 @@ Codex 官方 hooks 尚为实验特性（仅可靠覆盖 Bash、需人工 trust�
 - **服务端（事后）**：事件入库后由异步扫描引擎按**启用规则**二次评估，回写风险标签并落告警
   （`block` 命中一律落告警；`alert` 动作需 severity ≥ medium）；管理 API 为
   `POST/PUT/DELETE/PATCH /api/v1/rules` 系列，控制台与 API 变更均即时热更新扫描引擎
+
+告警外送（可选）：配置 `A3_NOTIFY_WEBHOOK_URL` 后，未处理告警每分钟聚合成一条中文摘要
+推送到企业微信/钉钉/飞书/Slack 兼容群机器人（格式由 `A3_NOTIFY_WEBHOOK_FORMAT` 决定）。
+聚合防轰炸 + 失败指数退避；连续失败 10 次的告警不再重试（控制台仍可见）。外送为
+**at-least-once**（极端情况下可能重复），处置状态以控制台为准。
 
 ## 隐私与脱敏
 

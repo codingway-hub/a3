@@ -40,6 +40,10 @@ services:
       A3_ALLOW_AUTO_REGISTER: ${A3_ALLOW_AUTO_REGISTER:-false}
       # 对外公开地址（install-server.sh 写入；反代场景配置即权威，用于 install.sh 注入）
       A3_PUBLIC_URL: ${A3_PUBLIC_URL:-}
+      # 告警通知外送 webhook（空=禁用）；格式 generic|wecom|dingtalk|feishu；最低严重级别 low|medium|high
+      A3_NOTIFY_WEBHOOK_URL: ${A3_NOTIFY_WEBHOOK_URL:-}
+      A3_NOTIFY_WEBHOOK_FORMAT: ${A3_NOTIFY_WEBHOOK_FORMAT:-generic}
+      A3_NOTIFY_MIN_SEVERITY: ${A3_NOTIFY_MIN_SEVERITY:-}
       # 采集器发布产物目录（镜像内已交叉编译五平台产物；二进制直跑时指向 bin/release）
       A3_AGENT_DIST: /app/agent
     ports:
