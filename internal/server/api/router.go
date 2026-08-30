@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/codingway-hub/a3/internal/server/alert"
+	"github.com/codingway-hub/a3/internal/server/api/installer"
 	"github.com/codingway-hub/a3/internal/server/auth"
 	"github.com/codingway-hub/a3/internal/server/ingest"
 	"github.com/codingway-hub/a3/internal/server/store"
@@ -25,8 +26,12 @@ type Router struct {
 	deviceAPI         *ingest.Handler // 设备侧接入（注册/上报）；nil 则不挂载
 	jwtSecret         string
 	adminUsername     string
-	adminPasswordHash string // 启动时对 env 明文口令做一次 bcrypt 后缓存
-	webDist           string // 前端静态目录；为空则不托管
+	adminPasswordHash string            // 启动时对 env 明文口令做一次 bcrypt 后缓存
+	webDist           string            // 前端静态目录；为空则不托管
+	agentDist         string            // 采集器发布产物目录；为空则不提供下载
+	allowAutoRegister bool              // setup-info 向指南页透出注册开关状态
+	publicURL         string            // 对外公开地址（配置即权威，反代场景）；空则按请求 Host 推导
+	agentAssetPaths   map[string]string // 白名单产物名 → 磁盘路径，启动期建立，绝不拼接用户输入
 }
 
 // RouterConfig 是装配参数。
@@ -35,11 +40,20 @@ type RouterConfig struct {
 	AdminUsername     string
 	AdminPasswordHash string
 	WebDist           string
+	AgentDist         string
+	AllowAutoRegister bool
+	PublicURL         string
 	DeviceAPI         *ingest.Handler
 }
 
 // NewRouter 构建装配器。
 func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfig RouterConfig) *Router {
+	agentAssetPaths := make(map[string]string)
+	if routerConfig.AgentDist != "" {
+		for _, assetName := range installer.SupportedAssetNames() {
+			agentAssetPaths[assetName] = filepath.Join(routerConfig.AgentDist, assetName)
+		}
+	}
 	return &Router{
 		eventStore:        eventStore,
 		alertService:      alertService,
@@ -48,6 +62,10 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		adminUsername:     routerConfig.AdminUsername,
 		adminPasswordHash: routerConfig.AdminPasswordHash,
 		webDist:           routerConfig.WebDist,
+		agentDist:         routerConfig.AgentDist,
+		allowAutoRegister: routerConfig.AllowAutoRegister,
+		publicURL:         routerConfig.PublicURL,
+		agentAssetPaths:   agentAssetPaths,
 	}
 }
 
@@ -66,9 +84,14 @@ func (api *Router) Setup() *gin.Engine {
 		api.deviceAPI.RegisterRoutes(engine)
 	}
 
+	// 采集器一键安装托管：install.sh 按请求地址注入服务端地址，产物下载走白名单映射（公开，先例 register）
+	engine.GET("/install.sh", api.HandleInstallScript)
+	engine.GET("/download/agent/:assetName", api.HandleAgentDownload)
+
 	// 控制台 API：login 公开，其余统一 JWT 保护
 	consoleGroup := engine.Group("/api/v1")
 	consoleGroup.POST("/auth/login", api.HandleLogin)
+	consoleGroup.GET("/setup-info", api.HandleSetupInfo)
 	protectedGroup := consoleGroup.Group("", auth.RequireJWT(api.jwtSecret))
 	{
 		protectedGroup.GET("/auth/me", api.HandleMe)

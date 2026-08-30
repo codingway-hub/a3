@@ -69,6 +69,9 @@ func main() {
 		AdminUsername:     serverConfig.AdminUsername,
 		AdminPasswordHash: string(adminPasswordHash),
 		WebDist:           serverConfig.WebDist,
+		AgentDist:         serverConfig.AgentDist,
+		AllowAutoRegister: serverConfig.AllowAutoRegister,
+		PublicURL:         serverConfig.PublicURL,
 		DeviceAPI:         ingest.NewHandler(ingest.NewService(eventStore, alertService, serverConfig.AllowAutoRegister)),
 	})
 	engine := router.Setup()

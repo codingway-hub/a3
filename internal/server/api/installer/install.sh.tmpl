@@ -1,0 +1,81 @@
+#!/bin/sh
+# a3 采集器一键安装脚本（由 a3 服务端 /install.sh 动态生成：服务端地址已注入下方 SERVER_URL）。
+# 用法：curl <服务端地址>/install.sh | sh
+# 自动完成：下载采集器 → 装到 ~/.a3/bin → 注册 → 安装 Hook → 安装常驻服务。
+set -eu
+
+SERVER_URL="{{.ServerURL}}"
+INSTALL_DIR="$HOME/.a3/bin"
+AGENT_BIN="$INSTALL_DIR/a3-agent"
+
+# 允许环境变量覆盖注入的服务端地址（高级用法；一般用户无需设置）
+if [ -n "${A3_SERVER_URL:-}" ]; then
+  SERVER_URL="$A3_SERVER_URL"
+fi
+
+echo "==> a3 采集器安装（服务端: $SERVER_URL）"
+
+# —— 平台识别 ——
+OS_NAME="$(uname -s)"
+OS_ARCH="$(uname -m)"
+case "$OS_NAME" in
+  Darwin) ASSET_OS="darwin" ;;
+  Linux)  ASSET_OS="linux" ;;
+  *)
+    echo "❌ 不支持 $OS_NAME：请从接入指南手动下载 windows 版采集器 (a3-agent-windows-amd64.exe)"
+    exit 1
+    ;;
+esac
+case "$OS_ARCH" in
+  x86_64|x86-64|amd64) ASSET_ARCH="amd64" ;;
+  aarch64|arm64)       ASSET_ARCH="arm64" ;;
+  *)
+    echo "❌ 不支持的架构 $OS_ARCH"
+    exit 1
+    ;;
+esac
+ASSET_NAME="a3-agent-$ASSET_OS-$ASSET_ARCH"
+echo "==> 平台: $ASSET_OS/$ASSET_ARCH"
+
+# —— 下载工具探测 ——
+if command -v curl >/dev/null 2>&1; then
+  fetch() { curl -fsSL "$1" -o "$2"; }
+elif command -v wget >/dev/null 2>&1; then
+  fetch() { wget -qO "$2" "$1"; }
+else
+  echo "❌ 需要 curl 或 wget 之一，请先安装"
+  exit 1
+fi
+
+# —— 下载 + 自检 + 原子落位 ——
+mkdir -p "$INSTALL_DIR"
+TMP_BIN="$(mktemp "${TMPDIR:-/tmp}/a3-agent.XXXXXX")"
+trap 'rm -f "$TMP_BIN"' EXIT
+echo "==> 下载采集器…"
+fetch "$SERVER_URL/download/agent/$ASSET_NAME" "$TMP_BIN"
+[ -s "$TMP_BIN" ] || { echo "❌ 下载为空，服务端可能未配置产物目录（A3_AGENT_DIST）"; exit 1; }
+chmod +x "$TMP_BIN"
+"$TMP_BIN" version >/dev/null 2>&1 || { echo "❌ 下载产物自检失败（无法执行），请反馈管理员"; exit 1; }
+mv -f "$TMP_BIN" "$AGENT_BIN"
+echo "==> 已安装到 $AGENT_BIN"
+
+# —— 注册（幂等：重复运行自动带本地 Token 换发） ——
+echo "==> 注册设备…"
+if ! "$AGENT_BIN" register --server "$SERVER_URL"; then
+  echo "❌ 注册失败。若提示需携带既有 Token：管理员在控制台吊销该设备后重跑本脚本即可。"
+  exit 1
+fi
+
+# —— 安装 Hook（拦截高危命令；幂等） ——
+echo "==> 安装 PreToolUse Hook…"
+"$AGENT_BIN" install-hook
+
+# —— 常驻服务（开机自启 + 崩溃拉起；失败不阻断） ——
+echo "==> 安装常驻服务…"
+if ! "$AGENT_BIN" install-service; then
+  echo "⚠️ 常驻服务未就绪：请手动执行 \"$AGENT_BIN run\" 开始采集"
+fi
+
+echo
+echo "✅ 安装完成！正在由常驻进程自动采集（日志: $HOME/.a3/agent.log）"
+echo "   验证: \"$AGENT_BIN\" service-status；卸载: \"$AGENT_BIN\" uninstall-service && \"$AGENT_BIN\" uninstall-hook"

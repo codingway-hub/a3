@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config 是服务端运行配置。
@@ -20,6 +21,8 @@ type Config struct {
 	AdminPasswordGenerated bool
 	AllowAutoRegister      bool   // 对应 A3_ALLOW_AUTO_REGISTER，默认关闭；单机自助接入需显式开启
 	WebDist                string // 前端静态目录；空则不托管
+	PublicURL              string // 对外公开地址 A3_PUBLIC_URL（反代场景配置即权威）；空则按请求 Host 推导
+	AgentDist              string // 采集器发布产物目录 A3_AGENT_DIST；空则不提供下载与指南页产物提示
 	TLSCertPath            string // 可选 HTTPS：A3_TLS_CERT；与 TLSKeyPath 必须同时提供
 	TLSKeyPath             string // 可选 HTTPS：A3_TLS_KEY；与 TLSCertPath 必须同时提供
 }
@@ -31,6 +34,8 @@ func Load() (*Config, error) {
 		DatabaseURL:   envOrDefault("A3_DATABASE_URL", "postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable"),
 		AdminUsername: envOrDefault("A3_ADMIN_USER", "admin"),
 		WebDist:       os.Getenv("A3_WEB_DIST"),
+		PublicURL:     strings.TrimSpace(os.Getenv("A3_PUBLIC_URL")),
+		AgentDist:     strings.TrimSpace(os.Getenv("A3_AGENT_DIST")),
 		TLSCertPath:   os.Getenv("A3_TLS_CERT"),
 		TLSKeyPath:    os.Getenv("A3_TLS_KEY"),
 	}
