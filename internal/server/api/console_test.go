@@ -263,7 +263,52 @@ func TestDevicesAndRulesEndpoints(t *testing.T) {
 	assert.Empty(t, test.alertService.Evaluate(jwtEvent), "停用后引擎不应命中")
 
 	// 恢复启用状态，避免污染其他用例的种子断言
-	require.NoError(t, test.eventStore.SetRuleEnabled(context.Background(), "dlp.jwt", true))
+	require.NoError(t, test.eventStore.SetRuleEnabled(context.Background(), "dlp.jwt", true, "api-tester"))
+
+	// 自定义规则全生命周期走 API：每个变更端点各落一条操作留痕，操作者为登录管理员
+	customAuditRuleID := "custom.api-audit"
+	t.Cleanup(func() {
+		cleanupPool, poolErr := pgxpool.New(context.Background(), servetest.TestDatabaseURL(t))
+		if poolErr == nil {
+			defer cleanupPool.Close()
+			_, _ = cleanupPool.Exec(context.Background(), `DELETE FROM rules WHERE id = $1`, customAuditRuleID)
+			_, _ = cleanupPool.Exec(context.Background(),
+				`DELETE FROM audit_log WHERE target_type='rule' AND target_id=$1`, customAuditRuleID)
+		}
+	})
+	created := test.do(http.MethodPost, "/api/v1/rules", `{
+		"id":"custom.api-audit","name":"API 审计规则","category":"test",
+		"matcher":{"target":"command","patterns":["terraform\\s+destroy"],"path_globs":[]},
+		"severity":"medium","action":"alert","enabled":true}`, test.jwtToken)
+	require.Equal(t, http.StatusCreated, created.Code)
+
+	updated := test.do(http.MethodPut, "/api/v1/rules/custom.api-audit", `{
+		"id":"custom.api-audit","name":"改名后","category":"test",
+		"matcher":{"target":"command","patterns":["terraform\\s+destroy"],"path_globs":[]},
+		"severity":"high","action":"alert","enabled":true}`, test.jwtToken)
+	require.Equal(t, http.StatusOK, updated.Code)
+
+	deleted := test.do(http.MethodDelete, "/api/v1/rules/custom.api-audit", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, deleted.Code)
+
+	ruleAuditListed := test.do(http.MethodGet,
+		"/api/v1/audit-log?target_type=rule&target_id=custom.api-audit", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, ruleAuditListed.Code)
+	var ruleAuditResponse struct {
+		Items []struct {
+			Action   string `json:"action"`
+			Operator string `json:"operator"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(ruleAuditListed.Body.Bytes(), &ruleAuditResponse))
+	require.Equal(t, 3, ruleAuditResponse.Total, "创建/更新/删除各留痕一条")
+	assert.Equal(t, "rule_delete", ruleAuditResponse.Items[0].Action)
+	assert.Equal(t, "rule_update", ruleAuditResponse.Items[1].Action)
+	assert.Equal(t, "rule_create", ruleAuditResponse.Items[2].Action)
+	for _, auditItem := range ruleAuditResponse.Items {
+		assert.Equal(t, fixtureAdminUser, auditItem.Operator)
+	}
 }
 
 // TestDeviceStatusPatchRevokeAndRestore 控制台吊销/恢复设备闭环。
@@ -303,6 +348,37 @@ func TestDeviceStatusPatchRevokeAndRestore(t *testing.T) {
 	missing := test.do(http.MethodPatch, "/api/v1/devices/dev-no-such",
 		`{"status":"revoked"}`, test.jwtToken)
 	assert.Equal(t, http.StatusNotFound, missing.Code)
+
+	// 操作级留痕：吊销与恢复各落一条 device_revoke/device_restore，操作者为登录管理员
+	revokedRecorder := test.do(http.MethodPatch, "/api/v1/devices/dev-api-1",
+		`{"status":"revoked"}`, test.jwtToken)
+	require.Equal(t, http.StatusOK, revokedRecorder.Code)
+	auditListed := test.do(http.MethodGet,
+		"/api/v1/audit-log?target_type=device&target_id=dev-api-1", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, auditListed.Code)
+	var auditResponse struct {
+		Items []struct {
+			Action      string          `json:"action"`
+			TargetType  string          `json:"target_type"`
+			TargetID    string          `json:"target_id"`
+			Operator    string          `json:"operator"`
+			Before      json.RawMessage `json:"before"`
+			After       json.RawMessage `json:"after"`
+			ActionLabel string          `json:"action_label"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(auditListed.Body.Bytes(), &auditResponse))
+	require.GreaterOrEqual(t, auditResponse.Total, 3, "恢复+吊销+本次吊销应至少三条留痕")
+	assert.Equal(t, "device_revoke", auditResponse.Items[0].Action, "id 倒序：最新在前")
+	assert.Equal(t, fixtureAdminUser, auditResponse.Items[0].Operator)
+	assert.Equal(t, "dev-api-1", auditResponse.Items[0].TargetID)
+	assert.Contains(t, string(auditResponse.Items[0].After), `"status":"revoked"`)
+	assert.Equal(t, "吊销设备", auditResponse.Items[0].ActionLabel)
+
+	// 未登录访问审计日志 → 401
+	unauthorizedAudit := test.do(http.MethodGet, "/api/v1/audit-log", "", "")
+	assert.Equal(t, http.StatusUnauthorized, unauthorizedAudit.Code)
 }
 
 // TestAlertsExportNotClampedByListPagination 守护导出数据完整性：

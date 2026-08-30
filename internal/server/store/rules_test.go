@@ -31,21 +31,21 @@ func TestBuiltinRulesSeededAndToggle(t *testing.T) {
 
 	// 停用 → 启用列表减少 → 恢复
 	toggleTarget := "dlp.jwt"
-	require.NoError(t, ruleStore.SetRuleEnabled(ctx, toggleTarget, false))
+	require.NoError(t, ruleStore.SetRuleEnabled(ctx, toggleTarget, false, "store-tester"))
 	afterDisable, disableErr := ruleStore.ListEnabledRules(ctx)
 	require.NoError(t, disableErr)
 	assert.Len(t, afterDisable, 13)
 
 	t.Cleanup(func() {
-		_ = ruleStore.SetRuleEnabled(context.Background(), toggleTarget, true) // 恢复现场，避免污染其他用例
+		_ = ruleStore.SetRuleEnabled(context.Background(), toggleTarget, true, "store-tester") // 恢复现场，避免污染其他用例
 	})
 
-	require.NoError(t, ruleStore.SetRuleEnabled(ctx, toggleTarget, true))
+	require.NoError(t, ruleStore.SetRuleEnabled(ctx, toggleTarget, true, "store-tester"))
 	afterEnable, enableErr := ruleStore.ListEnabledRules(ctx)
 	require.NoError(t, enableErr)
 	assert.Len(t, afterEnable, 14)
 
-	toggleErr := ruleStore.SetRuleEnabled(ctx, "rule-not-exists", false)
+	toggleErr := ruleStore.SetRuleEnabled(ctx, "rule-not-exists", false, "store-tester")
 	assert.ErrorIs(t, toggleErr, ErrNotFound)
 }
 
@@ -135,36 +135,36 @@ func TestCustomRuleCRUDAndSoftDelete(t *testing.T) {
 		Matcher:  []byte(`{"target":"command","patterns":["rm\\s+-rf"],"path_globs":[]}`),
 		Severity: "high", Action: "alert", Enabled: true,
 	}
-	require.NoError(t, ruleStore.CreateRule(ctx, newRule))
+	require.NoError(t, ruleStore.CreateRule(ctx, newRule, "store-tester"))
 	assert.False(t, newRule.CreatedAt.IsZero(), "RETURNING 应回填创建时间")
 
 	duplicateErr := ruleStore.CreateRule(ctx, &RuleRecord{
 		ID: customRuleID, Name: "重复", Matcher: []byte(`{"target":"command","patterns":["x"]}`),
-	})
+	}, "store-tester")
 	assert.ErrorIs(t, duplicateErr, ErrAlreadyExists)
 
 	gotRule, getErr := ruleStore.GetRule(ctx, customRuleID)
 	require.NoError(t, getErr)
 	gotRule.Name = "改名后"
-	require.NoError(t, ruleStore.UpdateRule(ctx, &gotRule))
+	require.NoError(t, ruleStore.UpdateRule(ctx, &gotRule, "store-tester"))
 	rereadRule, rereadErr := ruleStore.GetRule(ctx, customRuleID)
 	require.NoError(t, rereadErr)
 	assert.Equal(t, "改名后", rereadRule.Name)
 
 	// builtin 行内容不可改/不可删
-	updateBuiltinErr := ruleStore.UpdateRule(ctx, &RuleRecord{ID: "dlp.jwt", Name: "篡改"})
+	updateBuiltinErr := ruleStore.UpdateRule(ctx, &RuleRecord{ID: "dlp.jwt", Name: "篡改"}, "store-tester")
 	assert.ErrorIs(t, updateBuiltinErr, ErrNotFound)
-	deleteBuiltinErr := ruleStore.DeleteRule(ctx, "dlp.jwt")
+	deleteBuiltinErr := ruleStore.DeleteRule(ctx, "dlp.jwt", "store-tester")
 	assert.ErrorIs(t, deleteBuiltinErr, ErrNotFound)
 
-	require.NoError(t, ruleStore.DeleteRule(ctx, customRuleID))
+	require.NoError(t, ruleStore.DeleteRule(ctx, customRuleID, "store-tester"))
 	_, getDeletedErr := ruleStore.GetRule(ctx, customRuleID)
 	assert.ErrorIs(t, getDeletedErr, ErrNotFound)
 	afterDeleteRules, listErr := ruleStore.ListRules(ctx)
 	require.NoError(t, listErr)
 	assert.Len(t, afterDeleteRules, len(baselineRules), "软删行不应出现在列表中")
-	reDeleteErr := ruleStore.DeleteRule(ctx, customRuleID)
+	reDeleteErr := ruleStore.DeleteRule(ctx, customRuleID, "store-tester")
 	assert.ErrorIs(t, reDeleteErr, ErrNotFound)
-	setEnabledOnDeletedErr := ruleStore.SetRuleEnabled(ctx, customRuleID, true)
+	setEnabledOnDeletedErr := ruleStore.SetRuleEnabled(ctx, customRuleID, true, "store-tester")
 	assert.ErrorIs(t, setEnabledOnDeletedErr, ErrNotFound)
 }

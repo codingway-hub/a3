@@ -86,6 +86,7 @@ func (api *Router) Setup() *gin.Engine {
 		protectedGroup.PUT("/rules/:ruleID", api.HandleUpdateRule)
 		protectedGroup.DELETE("/rules/:ruleID", api.HandleDeleteRule)
 		protectedGroup.PATCH("/rules/:ruleID", api.HandlePatchRule)
+		protectedGroup.GET("/audit-log", api.HandleListAuditLog)
 	}
 
 	// 前端静态托管：NoRoute 时优先回退 index.html（SPA history 路由）

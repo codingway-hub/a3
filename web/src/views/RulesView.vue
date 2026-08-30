@@ -75,8 +75,9 @@
       <el-table-column label="更新时间" width="170">
         <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="120" align="center">
+      <el-table-column label="操作" width="160" align="center">
         <template #default="{ row }">
+          <el-button link type="primary" size="small" @click="openHistoryDialog(row)">历史</el-button>
           <template v-if="!row.builtin">
             <el-button link type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button link type="danger" size="small" @click="removeRule(row)">删除</el-button>
@@ -156,6 +157,36 @@
         <el-button type="primary" :loading="submitting" @click="submitDialog">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 变更历史对话框：谁在何时改了什么（规则 CRUD/启停的操作级留痕） -->
+    <el-dialog v-model="historyVisible" :title="`变更历史 · ${historyRuleId}`" width="760px">
+      <el-table :data="historyRows" v-loading="historyLoading" size="small">
+        <el-table-column label="时间" width="170">
+          <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column prop="operator" label="操作者" width="120" show-overflow-tooltip />
+        <el-table-column label="动作" width="110">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain" :type="historyActionTagType(row.action)">
+              {{ row.action_label || row.action }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="变更摘要" min-width="260">
+          <template #default="{ row }">
+            <span class="history-diff">{{ historyDiffSummary(row) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-model:current-page="historyPagination.page"
+        v-model:page-size="historyPagination.pageSize"
+        :total="historyPagination.total"
+        layout="total, prev, pager, next"
+        class="history-pagination"
+        @current-change="loadHistory"
+      />
+    </el-dialog>
   </el-card>
 </template>
 
@@ -163,7 +194,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { createRule, deleteRule, fetchRules, patchRuleEnabled, updateRule } from '../api/console'
+import { createRule, deleteRule, fetchAuditLog, fetchRules, patchRuleEnabled, updateRule } from '../api/console'
 import { formatDateTime, severityTagType } from '../utils/format'
 
 // 与服务端 ruleIDPattern 同源的客户端预检
@@ -355,6 +386,67 @@ async function submitDialog() {
   }
 }
 
+// —— 变更历史对话框 ——
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const historyRuleId = ref('')
+const historyRows = ref([])
+const historyPagination = reactive({ page: 1, pageSize: 10, total: 0 })
+
+function historyActionTagType(action) {
+  if (action === 'rule_delete') return 'danger'
+  if (action === 'rule_create') return 'success'
+  return 'info'
+}
+
+// historyDiffSummary 摘要：创建给目标形态；启停给结果；更新/删除给关键字段对照
+function historyDiffSummary(row) {
+  const before = row.before || {}
+  const after = row.after || {}
+  if (row.action === 'rule_create') {
+    return `创建：${after.severity || '-'} / ${after.action === 'block' ? '拦截' : '告警'} / ${after.enabled ? '启用' : '停用'}`
+  }
+  if (row.action === 'rule_patch') {
+    return `启停：${before.enabled ? '启用' : '停用'} → ${after.enabled ? '启用' : '停用'}`
+  }
+  if (row.action === 'rule_delete') {
+    return '删除（软删，ID 不复用）'
+  }
+  const changedFields = []
+  for (const field of ['name', 'severity', 'action', 'enabled']) {
+    if (JSON.stringify(before[field]) !== JSON.stringify(after[field])) {
+      changedFields.push(field)
+    }
+  }
+  const beforePatterns = before.matcher?.patterns?.length || 0
+  const afterPatterns = after.matcher?.patterns?.length || 0
+  if (beforePatterns !== afterPatterns) changedFields.push('matcher')
+  return changedFields.length ? `修改：${changedFields.join('、')}` : '更新了规则内容'
+}
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const { data } = await fetchAuditLog({
+      target_type: 'rule',
+      target_id: historyRuleId.value,
+      page: historyPagination.page,
+      page_size: historyPagination.pageSize,
+    })
+    historyRows.value = data.items || []
+    historyPagination.total = data.total || 0
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function openHistoryDialog(ruleRow) {
+  historyRuleId.value = ruleRow.id
+  historyPagination.page = 1
+  historyVisible.value = true
+  loadHistory()
+}
+
 onMounted(loadRules)
 </script>
 
@@ -391,5 +483,15 @@ onMounted(loadRules)
   color: #f56c6c;
   line-height: 1.6;
   margin-top: 2px;
+}
+
+.history-pagination {
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.history-diff {
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

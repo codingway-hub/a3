@@ -8,10 +8,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/codingway-hub/a3/internal/server/auth"
 	"github.com/codingway-hub/a3/internal/server/rules"
 	"github.com/codingway-hub/a3/internal/server/store"
 	"github.com/codingway-hub/a3/pkg/schema"
 )
+
+// auditOperator 从 JWT 上下文取操作者；缺失时落 "unknown"（fail-open：留痕优先于阻断变更）。
+func auditOperator(routerCtx *gin.Context) string {
+	if username, hasUsername := auth.UsernameFrom(routerCtx); hasUsername && username != "" {
+		return username
+	}
+	return "unknown"
+}
 
 // ruleIDPattern 自定义规则 id 约束：小写字母/数字/下划线/点/连字符，3-64 字符。
 // （与终端规则快照、告警关联展示共用同一命名空间，禁止大小写歧义。）
@@ -101,7 +110,7 @@ func (api *Router) HandleCreateRule(routerCtx *gin.Context) {
 		Matcher: matcherBytes, Severity: upsertRequest.Severity, Action: upsertRequest.Action,
 		Enabled: upsertRequest.Enabled, Builtin: false,
 	}
-	switch createErr := api.eventStore.CreateRule(ctx, ruleRecord); {
+	switch createErr := api.eventStore.CreateRule(ctx, ruleRecord, auditOperator(routerCtx)); {
 	case createErr == nil:
 	case errors.Is(createErr, store.ErrAlreadyExists):
 		routerCtx.JSON(http.StatusConflict, gin.H{"error": "规则 ID 已存在"})
@@ -157,7 +166,7 @@ func (api *Router) HandleUpdateRule(routerCtx *gin.Context) {
 		ID: ruleID, Name: upsertRequest.Name, Category: upsertRequest.Category,
 		Matcher: matcherBytes, Severity: upsertRequest.Severity, Action: upsertRequest.Action,
 		Enabled: upsertRequest.Enabled,
-	})
+	}, auditOperator(routerCtx))
 	switch {
 	case updateErr == nil:
 	case errors.Is(updateErr, store.ErrNotFound):
@@ -195,7 +204,7 @@ func (api *Router) HandleDeleteRule(routerCtx *gin.Context) {
 		return
 	}
 
-	switch deleteErr := api.eventStore.DeleteRule(ctx, ruleID); {
+	switch deleteErr := api.eventStore.DeleteRule(ctx, ruleID, auditOperator(routerCtx)); {
 	case deleteErr == nil:
 	case errors.Is(deleteErr, store.ErrNotFound):
 		routerCtx.JSON(http.StatusNotFound, gin.H{"error": "规则不存在或已删除"})
@@ -223,7 +232,8 @@ func (api *Router) HandlePatchRule(routerCtx *gin.Context) {
 	}
 	ctx := routerCtx.Request.Context()
 
-	patchErr := api.eventStore.SetRuleEnabled(ctx, routerCtx.Param("ruleID"), *patchRequest.Enabled)
+	patchErr := api.eventStore.SetRuleEnabled(ctx, routerCtx.Param("ruleID"),
+		*patchRequest.Enabled, auditOperator(routerCtx))
 	switch {
 	case patchErr == nil:
 	case errors.Is(patchErr, store.ErrNotFound):

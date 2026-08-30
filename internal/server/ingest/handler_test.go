@@ -122,7 +122,7 @@ func TestDeviceRulesEndpointWaterfall(t *testing.T) {
 	// rules 表承载迁移种子、不参与表重置；用例内启停内置规则后必须还原，
 	// 否则共享库状态泄漏到其他包的规则断言
 	t.Cleanup(func() {
-		_ = eventStore.SetRuleEnabled(context.Background(), "cmd.rm_rf_root", true)
+		_ = eventStore.SetRuleEnabled(context.Background(), "cmd.rm_rf_root", true, "ingest-tester")
 	})
 
 	fetchRules := func(bearerToken string) *httptest.ResponseRecorder {
@@ -158,9 +158,9 @@ func TestDeviceRulesEndpointWaterfall(t *testing.T) {
 	// ③ 服务端停用一条 → 下一次拉取条数减一且摘要变化（替换制语义的源头）
 	// 停用会改写共享 a3_test 库的内置行，必须恢复：servetest 不重置 rules，
 	// 而 TRUNCATE 会连迁移种子一起清掉，恢复 enabled 才是正确清理方式
-	require.NoError(t, eventStore.SetRuleEnabled(ctx, "cmd.rm_rf_root", false))
+	require.NoError(t, eventStore.SetRuleEnabled(ctx, "cmd.rm_rf_root", false, "ingest-tester"))
 	t.Cleanup(func() {
-		_ = eventStore.SetRuleEnabled(context.Background(), "cmd.rm_rf_root", true)
+		_ = eventStore.SetRuleEnabled(context.Background(), "cmd.rm_rf_root", true, "ingest-tester")
 	})
 	secondFetch := fetchRules(registerResponse.Token)
 	require.Equal(t, http.StatusOK, secondFetch.Code)

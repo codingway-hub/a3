@@ -101,7 +101,7 @@ func TestReloadRulesDisablesMatching(t *testing.T) {
 	service, eventStore := newTestService(t)
 	ctx := context.Background()
 
-	require.NoError(t, eventStore.SetRuleEnabled(ctx, "dlp.jwt", false))
+	require.NoError(t, eventStore.SetRuleEnabled(ctx, "dlp.jwt", false, "alert-tester"))
 	require.NoError(t, service.ReloadRules(ctx))
 
 	jwtEvent := mustConversationEvent("evt-reload-1",
@@ -109,7 +109,7 @@ func TestReloadRulesDisablesMatching(t *testing.T) {
 	riskTags := service.currentEngine().Evaluate(jwtEvent)
 	assert.Empty(t, riskTags, "停用规则重载后不应再命中")
 
-	require.NoError(t, eventStore.SetRuleEnabled(ctx, "dlp.jwt", true))
+	require.NoError(t, eventStore.SetRuleEnabled(ctx, "dlp.jwt", true, "alert-tester"))
 	require.NoError(t, service.ReloadRules(ctx))
 	riskTagsAfterEnable := service.currentEngine().Evaluate(jwtEvent)
 	require.Len(t, riskTagsAfterEnable, 1)

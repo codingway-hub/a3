@@ -26,9 +26,10 @@ func countEmbeddedUpMigrations(t *testing.T) int {
 // defaultTestDatabaseURL 本地开发库默认连接串，与 deploy/dev/docker-compose.dev.yml 对齐。
 const defaultTestDatabaseURL = "postgres://a3:a3@127.0.0.1:5433/a3_test?sslmode=disable"
 
-// expectedTableNames 迁移完成后 public schema 应存在的全部表（五张业务表 + 迁移记录表）。
+// expectedTableNames 迁移完成后 public schema 应存在的全部表（六张业务表 + 迁移记录表）。
 var expectedTableNames = []string{
 	"alerts",
+	"audit_log",
 	"devices",
 	"events",
 	"rules",
@@ -180,17 +181,25 @@ func TestDownMigrationThenMigrateRestoresUsableSchema(t *testing.T) {
 		t.Fatalf("首次 Migrate 不应报错: %v", initialMigrateErr)
 	}
 
-	downSQLContent, readDownErr := migrations.FS.ReadFile("0001_init.down.sql")
-	if readDownErr != nil {
-		t.Fatalf("读取 down.sql 失败: %v", readDownErr)
+	// 逐版本倒序执行全部 down.sql：迁移链每新增一版，down 路径也必须完整可回滚。
+	downFileMatches, globDownErr := fs.Glob(migrations.FS, "*.down.sql")
+	if globDownErr != nil {
+		t.Fatalf("枚举内嵌 down 迁移文件失败: %v", globDownErr)
 	}
-	// down.sql 同为多语句 SQL，与迁移器一致走简单查询协议执行。
-	if _, execDownErr := testConn.PgConn().Exec(testContext, string(downSQLContent)).ReadAll(); execDownErr != nil {
-		t.Fatalf("执行 down.sql 不应报错: %v", execDownErr)
+	slices.Reverse(downFileMatches)
+	for _, downFileName := range downFileMatches {
+		downSQLContent, readDownErr := migrations.FS.ReadFile(downFileName)
+		if readDownErr != nil {
+			t.Fatalf("读取 %s 失败: %v", downFileName, readDownErr)
+		}
+		// down.sql 同为多语句 SQL，与迁移器一致走简单查询协议执行。
+		if _, execDownErr := testConn.PgConn().Exec(testContext, string(downSQLContent)).ReadAll(); execDownErr != nil {
+			t.Fatalf("执行 %s 不应报错: %v", downFileName, execDownErr)
+		}
 	}
 	remainingBusinessTableCount := countBusinessTables(t, testConn)
 	if remainingBusinessTableCount != 0 {
-		t.Fatalf("down 之后五张业务表应全部清除, 实际残留 %d 张", remainingBusinessTableCount)
+		t.Fatalf("down 之后全部业务表应清除, 实际残留 %d 张", remainingBusinessTableCount)
 	}
 	// down.sql 不负责清理迁移器的版本记录（bookkeeping 表由迁移器管理），
 	// 此处手动清空以模拟「down 到零」后重新 up 的场景。
@@ -227,7 +236,7 @@ func newIntegrationTestConnection(t *testing.T) *pgx.Conn {
 func resetDatabaseSchema(t *testing.T, testConn *pgx.Conn) {
 	t.Helper()
 	_, dropErr := testConn.Exec(context.Background(),
-		`DROP TABLE IF EXISTS rules, alerts, events, sessions, devices, schema_migrations CASCADE`)
+		`DROP TABLE IF EXISTS rules, alerts, audit_log, events, sessions, devices, schema_migrations CASCADE`)
 	if dropErr != nil {
 		t.Fatalf("重置数据库 Schema 失败: %v", dropErr)
 	}

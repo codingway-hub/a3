@@ -74,3 +74,9 @@ export function deleteRule(ruleId) {
 export function patchRuleEnabled(ruleId, enabled) {
   return apiClient.patch(`/rules/${encodeURIComponent(ruleId)}`, { enabled })
 }
+
+// fetchAuditLog 控制台敏感操作留痕（规则 CRUD/启停、设备吊销/恢复）；
+// query 支持 target_type/target_id 过滤与 page/page_size 分页
+export function fetchAuditLog(query = {}) {
+  return apiClient.get('/audit-log', { params: query })
+}

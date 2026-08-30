@@ -49,7 +49,8 @@ func (api *Router) HandleListDevices(routerCtx *gin.Context) {
 
 // HandlePatchDeviceStatus PATCH /devices/:deviceID —— 吊销/恢复设备。
 // body 仅接受 {"status":"revoked"|"active"}；吊销即时生效（Token 鉴权中断），
-// 历史审计数据原样保留；ErrNotFound → 404。
+// 历史审计数据原样保留；每次变更同事务落 device_revoke/device_restore 审计；
+// ErrNotFound → 404。
 func (api *Router) HandlePatchDeviceStatus(routerCtx *gin.Context) {
 	var statusRequest struct {
 		Status string `json:"status"`
@@ -63,8 +64,8 @@ func (api *Router) HandlePatchDeviceStatus(routerCtx *gin.Context) {
 		return
 	}
 
-	statusErr := api.eventStore.SetDeviceStatus(routerCtx.Request.Context(),
-		routerCtx.Param("deviceID"), statusRequest.Status)
+	statusErr := api.eventStore.SetDeviceStatusWithAudit(routerCtx.Request.Context(),
+		routerCtx.Param("deviceID"), statusRequest.Status, auditOperator(routerCtx))
 	switch {
 	case statusErr == nil:
 		routerCtx.JSON(http.StatusOK, gin.H{"device_id": routerCtx.Param("deviceID"), "status": statusRequest.Status})
