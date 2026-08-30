@@ -1,0 +1,21 @@
+scripts/smoke-agent.sh
+  s_8301e3490dd7cb::t_3782268963af9e 69
+scripts/offline-drill.sh
+  s_8301e3490dd7cb::t_0f91aecd3de3b6 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "616544c1e61f5ebbfd345b05caa5f088d3db9d1f",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
