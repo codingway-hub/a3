@@ -96,17 +96,27 @@ func (claudePlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.Hoo
 	// DeviceID 此处留空，由主循环上传前统一填充，故不做严格 Validate。
 	// 幂等键取自原始输入保证跨次执行稳定；ToolInput 出站前脱敏
 	// （hook 信封不经 run 的 maskEventContent，须在此收口；风险事件最小化原则下不设开关）。
+	// 调用级 tool_use_id 并入种子：同会话重复执行相同命令 → 不同 EventID，
+	// 服务端复合键下各自落库，证据不因按键相同被静默合并。
 	if hookRequest.SessionID == "" {
 		return hookDecision, nil // 无法归属会话：仅裁决不上报
 	}
+	eventSeed := hookRequest.SessionID + "|" + hookRequest.ToolName + "|" + string(hookRequest.ToolInput)
+	if hookRequest.ToolUseID != "" {
+		eventSeed = hookRequest.SessionID + "|" + hookRequest.ToolName + "|" + hookRequest.ToolUseID + "|" + string(hookRequest.ToolInput)
+	}
+	// ToolCallID 优先取宿主分配的真实调用 ID（可与日志中的 tool_use 对应），缺失时回落确定性派生。
+	toolCallID := hookRequest.ToolUseID
+	if toolCallID == "" {
+		toolCallID = uuidx.MustNewV5(NamespaceA3HookEvent, "call|"+eventSeed)
+	}
 	hookDecision.RiskEvents = []schema.Event{{
-		EventID: uuidx.MustNewV5(NamespaceA3HookEvent,
-			hookRequest.SessionID+"|"+hookRequest.ToolName+"|"+string(hookRequest.ToolInput)),
+		EventID: uuidx.MustNewV5(NamespaceA3HookEvent, eventSeed),
 		EventType: schema.EventTypeToolCall,
 		AgentType: schema.AgentTypeClaudeCode, SessionID: hookRequest.SessionID,
 		OccurredAt:   claudePlugin.nowFunc().UTC(),
 		ToolName:     hookRequest.ToolName,
-		ToolCallID:   uuidx.MustNewV5(NamespaceA3HookEvent, "call|"+hookRequest.SessionID+"|"+hookRequest.ToolName+"|"+string(hookRequest.ToolInput)),
+		ToolCallID:   toolCallID,
 		ToolInput:    masking.RedactJSONLeaves(hookRequest.ToolInput),
 		RiskTags:     matchedTags,
 		SourceMethod: schema.SourceMethodHook,

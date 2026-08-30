@@ -81,9 +81,11 @@ func main() {
 
 	serverErrorCh := make(chan error, 1)
 	go func() {
+		tlsEnabled := serverConfig.TLSKeyPath != ""
 		logger.Info("a3 服务端已启动", "addr", serverConfig.Addr,
-			"auto_register", serverConfig.AllowAutoRegister, "web_dist", serverConfig.WebDist != "")
-		serverErrorCh <- httpServer.ListenAndServe()
+			"tls", tlsEnabled, "auto_register", serverConfig.AllowAutoRegister,
+			"web_dist", serverConfig.WebDist != "")
+		serverErrorCh <- buildServeCall(httpServer, serverConfig.TLSCertPath, serverConfig.TLSKeyPath)()
 	}()
 
 	// 优雅关闭：等待 SIGINT/SIGTERM 或监听失败
@@ -127,6 +129,15 @@ func setupStore(ctx context.Context, databaseURL string, logger *slog.Logger) (*
 
 	logger.Info("数据库迁移完成", "database", maskDatabaseURL(databaseURL))
 	return store.NewStore(pool), pool.Close, nil
+}
+
+// buildServeCall 决定监听方式：证书与私钥齐备时走 HTTPS，否则明文 HTTP。
+// 两者缺一是配置层错误（Load 已拒绝），此处仅做非空判定。
+func buildServeCall(server *http.Server, certPath, keyPath string) func() error {
+	if certPath != "" && keyPath != "" {
+		return func() error { return server.ListenAndServeTLS(certPath, keyPath) }
+	}
+	return server.ListenAndServe
 }
 
 // maskDatabaseURL 隐藏连接串口令后用于日志输出；解析失败时原样返回主机段。

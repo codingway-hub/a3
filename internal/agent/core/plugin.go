@@ -18,10 +18,13 @@ type LogWatchSpec struct {
 }
 
 // HookRequest 宿主工具前置 Hook 的 stdin 输入（ClaudeCode PreToolUse 协议子集）。
+// ToolUseID 为本次工具调用的唯一 ID（宿主分配，如 toolu_xxx）：并入 v5 事件种子
+// 后，同会话重复执行相同命令也能得到不同 event_id，避免服务端去重吞证。
 type HookRequest struct {
 	SessionID string          `json:"session_id"`
 	ToolName  string          `json:"tool_name"`
 	ToolInput json.RawMessage `json:"tool_input"`
+	ToolUseID string          `json:"tool_use_id"`
 }
 
 // HookDecision 插件对一次 Hook 调用的裁决：

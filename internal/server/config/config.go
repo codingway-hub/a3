@@ -18,21 +18,28 @@ type Config struct {
 	AdminUsername          string
 	AdminPassword          string
 	AdminPasswordGenerated bool
-	AllowAutoRegister      bool   // 对应 A3_ALLOW_AUTO_REGISTER，单机模式默认开放
+	AllowAutoRegister      bool   // 对应 A3_ALLOW_AUTO_REGISTER，默认关闭；单机自助接入需显式开启
 	WebDist                string // 前端静态目录；空则不托管
+	TLSCertPath            string // 可选 HTTPS：A3_TLS_CERT；与 TLSKeyPath 必须同时提供
+	TLSKeyPath             string // 可选 HTTPS：A3_TLS_KEY；与 TLSCertPath 必须同时提供
 }
 
 // Load 从环境变量加载配置；缺省值满足本地单机开发开箱即用。
 func Load() (*Config, error) {
 	serverConfig := &Config{
-		Addr:          envOrDefault("A3_ADDR", ":8080"),
+		Addr:          envOrDefault("A3_ADDR", "127.0.0.1:8080"), // 默认仅绑本机，避免明文意外暴露到局域网
 		DatabaseURL:   envOrDefault("A3_DATABASE_URL", "postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable"),
 		AdminUsername: envOrDefault("A3_ADMIN_USER", "admin"),
 		WebDist:       os.Getenv("A3_WEB_DIST"),
+		TLSCertPath:   os.Getenv("A3_TLS_CERT"),
+		TLSKeyPath:    os.Getenv("A3_TLS_KEY"),
+	}
+	if (serverConfig.TLSCertPath == "") != (serverConfig.TLSKeyPath == "") {
+		return nil, fmt.Errorf("A3_TLS_CERT 与 A3_TLS_KEY 必须同时配置才能启用 HTTPS")
 	}
 
 	var err error
-	serverConfig.AllowAutoRegister, err = strconv.ParseBool(envOrDefault("A3_ALLOW_AUTO_REGISTER", "true"))
+	serverConfig.AllowAutoRegister, err = strconv.ParseBool(envOrDefault("A3_ALLOW_AUTO_REGISTER", "false"))
 	if err != nil {
 		return nil, fmt.Errorf("A3_ALLOW_AUTO_REGISTER 不是合法布尔值: %w", err)
 	}

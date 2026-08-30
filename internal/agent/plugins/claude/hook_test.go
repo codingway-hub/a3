@@ -133,3 +133,59 @@ func TestRunPreToolUseMalformedInputPassesThrough(t *testing.T) {
 	assert.Equal(t, 0, exitCode, "协议外输入必须放行，不得卡死工作流")
 	assert.Contains(t, stderrText, "放行")
 }
+
+func TestEvaluateHookToolUseIDDerivesCallScopedEventID(t *testing.T) {
+	claudePlugin := newTestPlugin(t)
+	command := json.RawMessage(`{"command":"git reset --hard HEAD~1"}`)
+
+	firstHook, firstErr := claudePlugin.EvaluateHook(core.HookRequest{
+		SessionID: "sess-repeated", ToolName: "Bash",
+		ToolUseID: "toolu_0001", ToolInput: command,
+	})
+	require.NoError(t, firstErr)
+	secondHook, secondErr := claudePlugin.EvaluateHook(core.HookRequest{
+		SessionID: "sess-repeated", ToolName: "Bash",
+		ToolUseID: "toolu_0002", ToolInput: command,
+	})
+	require.NoError(t, secondErr)
+	require.Len(t, firstHook.RiskEvents, 1)
+	require.Len(t, secondHook.RiskEvents, 1)
+	assert.NotEqual(t, firstHook.RiskEvents[0].EventID, secondHook.RiskEvents[0].EventID,
+		"同会话同命令不同 tool_use_id 必须产生不同 EventID（证据不得被去重吞并）")
+	assert.Equal(t, "toolu_0001", firstHook.RiskEvents[0].ToolCallID,
+		"ToolCallID 应优先取宿主分配的真实调用 ID")
+	assert.Equal(t, "toolu_0002", secondHook.RiskEvents[0].ToolCallID)
+}
+
+func TestEvaluateHookSameToolUseIDStaysIdempotent(t *testing.T) {
+	claudePlugin := newTestPlugin(t)
+	hookRequest := core.HookRequest{
+		SessionID: "sess-idem", ToolName: "Bash",
+		ToolUseID: "toolu_same", ToolInput: json.RawMessage(`{"command":"git reset --hard HEAD~1"}`),
+	}
+
+	firstHook, firstErr := claudePlugin.EvaluateHook(hookRequest)
+	require.NoError(t, firstErr)
+	secondHook, secondErr := claudePlugin.EvaluateHook(hookRequest)
+	require.NoError(t, secondErr)
+	assert.Equal(t, firstHook.RiskEvents[0].EventID, secondHook.RiskEvents[0].EventID,
+		"同 tool_use_id 重放必须幂等（服务端去重语义依赖）")
+	assert.Equal(t, "toolu_same", firstHook.RiskEvents[0].ToolCallID)
+}
+
+func TestEvaluateHookWithoutToolUseIDFallsBackToLegacySeed(t *testing.T) {
+	claudePlugin := newTestPlugin(t)
+	legacyRequest := core.HookRequest{
+		SessionID: "sess-legacy", ToolName: "Bash",
+		ToolInput: json.RawMessage(`{"command":"git reset --hard HEAD~1"}`),
+	}
+
+	firstHook, firstErr := claudePlugin.EvaluateHook(legacyRequest)
+	require.NoError(t, firstErr)
+	require.Len(t, firstHook.RiskEvents, 1)
+	secondHook, secondErr := claudePlugin.EvaluateHook(legacyRequest)
+	require.NoError(t, secondErr)
+	assert.Equal(t, firstHook.RiskEvents[0].EventID, secondHook.RiskEvents[0].EventID,
+		"无 tool_use_id（旧宿主）应回落旧种子：同输入仍幂等")
+	assert.NotEmpty(t, firstHook.RiskEvents[0].ToolCallID, "回落路径仍需确定性 ToolCallID")
+}
