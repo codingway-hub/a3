@@ -92,6 +92,12 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 # 3. 浏览器打开 http://127.0.0.1:8080 ，用 .env 中的管理员账号登录
 ```
 
+或一条命令自动完成上述配置与启动（地址换成对外地址；口令留空自动生成、非回环地址自动开放监听）：
+
+```bash
+./deploy/install-server.sh http://aa.bb.com:12345
+```
+
 > 快速上手想免登记直接接入：在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true`
 > 再 `make compose-up`，终端对本机地址 `register` 即可。生产默认关闭，接入流程见
 > [团队集中登记](#团队集中登记)。
@@ -120,6 +126,13 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 设备须由管理员预先登记。具体接入流程见该文件头部说明（临时开放注册 → 设备 `register` → 改回关闭）。
 
 ## 客户端接入
+
+**一条命令方式（推荐）**：管理员把控制台「接入指南」页（`http://<服务端地址>/setup-guide`，免登录）
+发给采集端用户，用户照页面复制执行 `curl http://<服务端地址>/install.sh | sh` 即可——脚本自动
+识别平台、下载采集器（服务端镜像内已内置五平台产物）、注册、装 Hook、装常驻服务。
+指南页会在注册开关关闭或产物未就绪时给出警示。详见[安装说明](docs/INSTALL.md)。
+
+### 手动方式
 
 采集器二进制从 `make release-agent` 产物（`bin/release/a3-agent-*`）按平台选取，或源码构建 `make build-agent`。
 
@@ -338,6 +351,7 @@ Codex 官方 hooks 尚为实验特性（仅可靠覆盖 Bash、需人工 trust�
 
 ## 更多文档
 
+- [安装说明（简明版）](docs/INSTALL.md)
 - [业务说明（BRD）](docs/a3%20%28AI%20Agent%20Audit%29%20_%20开源项目业务说明%20%28README-Style%20BRD%29.md)
 - [整体软件技术架构设计](docs/a3%20(AI%20Agent%20Audit)%20整体软件技术架构设计（通用可扩展基座）.md)
 - [v1.0 一期落地技术方案](docs/a3%20v1.0%20一期落地技术方案（ClaudeCode%20专属实现文档）.md)
