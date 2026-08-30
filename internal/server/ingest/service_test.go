@@ -94,42 +94,42 @@ func TestRegisterDeviceIdempotentByFingerprint(t *testing.T) {
 	assert.True(t, errors.Is(emptyErr, ErrEventInvalid))
 }
 
-func TestRegisterDeviceRestoresRevokedDeviceWithCredential(t *testing.T) {
+func TestRegisterDeviceRestoresRevokedDeviceWithoutCredential(t *testing.T) {
 	ingestService, eventStore := newTestService(t)
 	ctx := context.Background()
 
 	firstResult, firstErr := ingestService.RegisterDevice(ctx, RegisterInput{
 		Hostname: "macbook", OS: "darwin", Arch: "arm64",
-		MachineFingerprint: "fp-restore-1"}, "")
+		MachineFingerprint: "fp-recover-1"}, "")
 	require.NoError(t, firstErr)
 	require.NoError(t, eventStore.SetDeviceStatus(ctx, firstResult.DeviceID, "revoked"))
 
-	// 无凭证不能借被吊销设备的指纹上号
-	_, noCredentialErr := ingestService.RegisterDevice(ctx, RegisterInput{
-		Hostname: "impostor", MachineFingerprint: "fp-restore-1"}, "")
-	assert.ErrorIs(t, noCredentialErr, store.ErrCredentialRequired)
-
-	// 携带旧凭证（吊销前发放）：设备主恢复上号，新建 active 行，吊销留痕保留
-	restoreResult, restoreErr := ingestService.RegisterDevice(ctx, RegisterInput{
+	// 令牌丢失后的恢复路径：管理员吊销后，无凭证重新注册即可重建设备
+	// （指纹已释放——部分唯一索引只约束 active 行；吊销旧行保留审计留痕）
+	recoverResult, recoverErr := ingestService.RegisterDevice(ctx, RegisterInput{
 		Hostname: "macbook", OS: "darwin", Arch: "arm64",
-		MachineFingerprint: "fp-restore-1"}, firstResult.Token)
-	require.NoError(t, restoreErr)
-	assert.NotEqual(t, firstResult.DeviceID, restoreResult.DeviceID, "恢复上号应重建设备，不复活吊销行")
+		MachineFingerprint: "fp-recover-1"}, "")
+	require.NoError(t, recoverErr)
+	assert.NotEqual(t, firstResult.DeviceID, recoverResult.DeviceID, "恢复必须重建设备，不复活吊销行")
 
 	revokedDevice, revokedFindErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(firstResult.Token))
 	require.NoError(t, revokedFindErr)
 	assert.Equal(t, "revoked", revokedDevice.Status, "吊销留痕必须保留")
-	restoredDevice, restoredFindErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(restoreResult.Token))
-	require.NoError(t, restoredFindErr)
-	assert.Equal(t, "active", restoredDevice.Status)
-	assert.Equal(t, "fp-restore-1", restoredDevice.MachineFingerprint)
+	recoveredDevice, recoveredFindErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(recoverResult.Token))
+	require.NoError(t, recoveredFindErr)
+	assert.Equal(t, "active", recoveredDevice.Status)
+	assert.Equal(t, "fp-recover-1", recoveredDevice.MachineFingerprint)
 
-	// 恢复上号后再带新凭证轮换：命中 active 新行，原地轮换
+	// 重建后再注册：active 新行存在，凭证保护恢复生效，无凭证仍被拒
+	_, noCredentialErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "macbook", MachineFingerprint: "fp-recover-1"}, "")
+	assert.ErrorIs(t, noCredentialErr, store.ErrCredentialRequired, "active 行重建后必须凭证才能轮换")
+	// 携带新凭证：命中 active 新行，原地轮换而非再建新行
 	thirdResult, thirdErr := ingestService.RegisterDevice(ctx, RegisterInput{
 		Hostname: "macbook", OS: "darwin", Arch: "arm64",
-		MachineFingerprint: "fp-restore-1"}, restoreResult.Token)
+		MachineFingerprint: "fp-recover-1"}, recoverResult.Token)
 	require.NoError(t, thirdErr)
-	assert.Equal(t, restoreResult.DeviceID, thirdResult.DeviceID, "已恢复设备应原地轮换而非再建新行")
+	assert.Equal(t, recoverResult.DeviceID, thirdResult.DeviceID, "再次注册命中的应是新 active 行")
 }
 
 func TestRegisterDeviceDisabledWhenAutoRegisterOff(t *testing.T) {

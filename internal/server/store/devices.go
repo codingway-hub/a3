@@ -59,10 +59,12 @@ func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 // RegisterDeviceAtomic 原子完成「注册或凭证证明轮换」，单事务内对指纹行取锁，
 // 杜绝原先「查-改」两步间的并发竞态与无凭证顶替：
 //   - 指纹行不存在 → 插入新设备（active；status/时间戳回填 device）；
-//   - 指纹行存在且凭证匹配 → 无凭证返回 ErrCredentialRequired，凭证不符返回
-//     ErrCredentialMismatch；匹配则原地轮换 token_hash 并刷新心跳，设备身份不变；
-//   - 指纹行存在但已 revoked 且凭证匹配（设备主携带旧凭证恢复上号）→ 新建 active
-//     行，吊销旧行保留作为审计留痕（部分唯一索引下同指纹可并存 active/revoked）。
+//   - active 指纹行存在 → 必须携带旧 Token 作凭证：无凭证 ErrCredentialRequired、
+//     凭证不符 ErrCredentialMismatch；匹配则原地轮换 token_hash 并刷新心跳，
+//     设备身份不变（防顶替）；
+//   - 仅 revoked 历史行存在（指纹已释放）→ 直接新建 active 行，无需旧凭证——管理员
+//     吊销后令牌丢失的恢复路径；吊销旧行保留作为审计留痕（部分唯一索引下同指纹可
+//     并存 active/revoked）。
 //
 // 返回 (deviceID, created, error)：created=true 为新注册；配合 partial unique 索引，
 // 并发插入同指纹 active 行时由 23505 兜底并归一为 ErrCredentialRequired。
@@ -97,15 +99,14 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 		return "", false, scanErr
 	}
 
-	// 指纹行已存在：必须证书证明凭证。
-	if claimedTokenHash == "" {
-		return "", false, ErrCredentialRequired
-	}
-	if subtle.ConstantTimeCompare([]byte(claimedTokenHash), []byte(storedTokenHash)) != 1 {
-		return "", false, ErrCredentialMismatch
-	}
-
 	if deviceStatus == "active" {
+		// active 行存在：必须凭旧 Token 证明归属，防顶替注册轮换。
+		if claimedTokenHash == "" {
+			return "", false, ErrCredentialRequired
+		}
+		if subtle.ConstantTimeCompare([]byte(claimedTokenHash), []byte(storedTokenHash)) != 1 {
+			return "", false, ErrCredentialMismatch
+		}
 		// 凭证匹配：原地轮换，设备身份不变。
 		if _, updateErr := tx.Exec(ctx,
 			`UPDATE devices SET token_hash = $2, last_seen_at = now() WHERE device_id = $1`,
@@ -115,7 +116,9 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 		return existingDeviceID, false, tx.Commit(ctx)
 	}
 
-	// revoked 历史行且凭证匹配：设备主恢复上号，新建 active 行保留留痕。
+	// 仅剩 revoked 历史行：指纹已释放，直接注册新 active 行（管理员吊销后令牌
+	// 丢失的恢复路径，无需旧凭证）；吊销旧行保留审计留痕，部分唯一索引允许
+	// active/revoked 同指纹并存。
 	device.Status = "active"
 	if insertErr := insertDeviceInTx(ctx, tx, device); insertErr != nil {
 		return "", false, mapFingerprintConflict(insertErr)
