@@ -1,0 +1,37 @@
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_505bfbd41acf71 282-307,309-327,329-348,353-354,366-367,375-379,382-384,388-398,400,403-410,416-430
+  s_8301e3490dd7cb::t_a5f5ebb580020e 9,13
+  s_8301e3490dd7cb::t_d0585bb87b0d18 308,328
+  s_8301e3490dd7cb::t_cc43cb08d4c588 31-37
+  s_8301e3490dd7cb::t_01a5f06f9b8785 244-250,257-259
+  s_8301e3490dd7cb::t_7483e04c6fe4a8 431
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_0e49b2af916062 6
+  s_8301e3490dd7cb::t_b04652cc800d70 104-142
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_d298a6db24d749 187,189,227-249
+  s_8301e3490dd7cb::t_83cd961661654f 280-281,284
+  s_8301e3490dd7cb::t_a621e0041e4e22 250
+cmd/agent/spool_replay_test.go
+  s_8301e3490dd7cb::t_1f8ea7dcc9e831 12
+  s_8301e3490dd7cb::t_42a0bdea3027c5 54,57-79
+  s_8301e3490dd7cb::t_3746178e882f44 219
+  s_8301e3490dd7cb::t_9105a229d849b7 216
+  s_8301e3490dd7cb::t_ac271abe9c7f67 1-11,13-53,55-56,80-215,217-218,220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "22cc74c9bc13f33a8d92a45d74ac0c1998786cca",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
