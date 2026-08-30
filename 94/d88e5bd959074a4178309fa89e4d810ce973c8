@@ -1,0 +1,28 @@
+README.md
+  s_8301e3490dd7cb::t_6a393148dcadff 123,128-130,132,134,142,144
+  s_8301e3490dd7cb::t_5ed442c7367ce4 34,36-37,39-40
+  s_8301e3490dd7cb::t_4e42b702d13075 97-98
+docs/INSTALL.md
+  s_8301e3490dd7cb::t_aa32dae6a709ab 80-82
+  s_8301e3490dd7cb::t_58513733f7154a 28-29,34
+deploy/install-server.sh
+  s_8301e3490dd7cb::t_4f201495a88383 79,120-125
+  s_8301e3490dd7cb::t_3434cd74927d34 54-58,60,62,66-78
+  s_8301e3490dd7cb::t_4c5d8b91b26ceb 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "94d88e5bd959074a4178309fa89e4d810ce973c8",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
