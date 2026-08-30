@@ -66,7 +66,7 @@ BLOCK_OUTPUT=$(printf '%s' '{"session_id":"smoke-hook","tool_name":"Bash","tool_
   | "$AGENT_BIN" hook pretooluse 2>&1)
 BLOCK_CODE=$?
 set -e
-[ "$BLOCK_CODE" -eq 2 ] || { echo "❌ 高危命令未被以退出码 2 拦截（实际 $BLOCK_CODE）：$BLOCK_OUTPUT"; exit 1; }
+[ "$BLOCK_CODE" -eq 2 ] || { echo "❌ 高危命令未被以退出码 2 拦截（实际 ${BLOCK_CODE}）：${BLOCK_OUTPUT}"; exit 1; }
 echo "$BLOCK_OUTPUT" | grep -q "已拦截" || { echo "❌ 阻断原因缺失：$BLOCK_OUTPUT"; exit 1; }
 echo "    已拦截(exit=2)"
 

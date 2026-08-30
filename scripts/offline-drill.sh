@@ -64,7 +64,7 @@ register_or_selfheal
 PROJ_DIR="$HOME/.claude/projects/drill"
 SESSION_ID="offline-drill-$(date +%s)"
 
-echo "==> ③ 断网运行（指向 $DEAD_URL）并追加会话日志"
+echo "==> ③ 断网运行（指向 ${DEAD_URL}）并追加会话日志"
 mkdir -p "$PROJ_DIR"
 A3_SERVER_URL="$DEAD_URL" "$AGENT_BIN" run >"$SANDBOX_HOME/agent-offline.log" 2>&1 &
 AGENT_PID=$!
