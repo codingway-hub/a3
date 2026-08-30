@@ -80,3 +80,8 @@ export function patchRuleEnabled(ruleId, enabled) {
 export function fetchAuditLog(query = {}) {
   return apiClient.get('/audit-log', { params: query })
 }
+
+// fetchSetupInfo 接入指南页信息（公开端点）：注册开关、产物就绪、公开地址
+export function fetchSetupInfo() {
+  return apiClient.get('/setup-info')
+}

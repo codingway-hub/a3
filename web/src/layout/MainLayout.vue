@@ -30,6 +30,10 @@
           <el-icon><Lock /></el-icon>
           <span>规则管理</span>
         </el-menu-item>
+        <el-menu-item index="/setup-guide">
+          <el-icon><Connection /></el-icon>
+          <span>接入指南</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

@@ -14,6 +14,13 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      // 接入指南公开可访问：采集端用户没有控制台账号，管理员直接把链接发给他们
+      path: '/setup-guide',
+      name: 'setup-guide',
+      component: () => import('../views/SetupGuideView.vue'),
+      meta: { public: true, title: '接入指南' },
+    },
+    {
       path: '/',
       component: () => import('../layout/MainLayout.vue'),
       redirect: '/overview',
@@ -53,6 +60,12 @@ const router = createRouter({
           name: 'rules',
           component: () => import('../views/RulesView.vue'),
           meta: { title: '规则管理' },
+        },
+        {
+          path: 'setup-guide',
+          name: 'setup-guide-console',
+          component: () => import('../views/SetupGuideView.vue'),
+          meta: { title: '接入指南' },
         },
       ],
     },
