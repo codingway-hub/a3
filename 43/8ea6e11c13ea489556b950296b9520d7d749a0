@@ -1,0 +1,24 @@
+README.md
+  s_8301e3490dd7cb::t_49145819a71921 139-140,147,149
+  s_8301e3490dd7cb::t_add01a8ca283ed 118
+  s_8301e3490dd7cb::t_7466c138e59e1c 101-102
+  s_8301e3490dd7cb::t_8f6a64c66d8d0f 122-123,127
+docs/INSTALL.md
+  s_8301e3490dd7cb::t_e207486eb2b116 30,32-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "438ea6e11c13ea489556b950296b9520d7d749a0",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
