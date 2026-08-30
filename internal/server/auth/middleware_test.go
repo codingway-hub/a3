@@ -124,3 +124,33 @@ func TestRequireDeviceTokenMiddleware(t *testing.T) {
 	missingHeaderRecorder, _ := performRequest(router, http.MethodGet, "/probe", nil)
 	assert.Equal(t, 401, missingHeaderRecorder.Code)
 }
+
+func TestRequireDeviceTokenRevokedDeviceBlocked(t *testing.T) {
+	deviceStore := newTestStore(t)
+	router := newAuthTestRouter(RequireDeviceToken(deviceStore), "/probe")
+
+	plaintextToken, generateErr := GenerateDeviceToken()
+	require.NoError(t, generateErr)
+	createErr := deviceStore.CreateDevice(context.Background(), &store.Device{
+		DeviceID:  "dev-revoked-mw",
+		TokenHash: HashToken(plaintextToken),
+		Hostname:  "host-revoked",
+	})
+	require.NoError(t, createErr)
+
+	// 吊销前：Token 有效
+	activeRecorder, _ := performRequest(router, http.MethodGet, "/probe",
+		map[string]string{"Authorization": "Bearer " + plaintextToken})
+	assert.Equal(t, 200, activeRecorder.Code)
+
+	// 吊销后：同一 Token 立即 401（吊销即生效），审计数据保留（设备行仍可反查）
+	require.NoError(t, deviceStore.SetDeviceStatus(context.Background(), "dev-revoked-mw", "revoked"))
+	revokedRecorder, revokedBody := performRequest(router, http.MethodGet, "/probe",
+		map[string]string{"Authorization": "Bearer " + plaintextToken})
+	assert.Equal(t, 401, revokedRecorder.Code)
+	assert.Equal(t, "设备已吊销，请联系管理员", revokedBody["error"])
+
+	deviceRow, lookupErr := deviceStore.GetDeviceByTokenHash(context.Background(), HashToken(plaintextToken))
+	require.NoError(t, lookupErr)
+	assert.Equal(t, "revoked", deviceRow.Status, "吊销仅拦截访问路径，设备行与审计数据必须保留")
+}

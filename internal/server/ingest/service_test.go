@@ -32,7 +32,7 @@ func mustRegisteredDevice(t *testing.T, ingestService *Service, eventStore *stor
 	registerResult, registerErr := ingestService.RegisterDevice(context.Background(), RegisterInput{
 		Hostname: "host-" + fingerprint, OS: "darwin", Arch: "amd64",
 		MachineFingerprint: fingerprint,
-	})
+	}, "")
 	require.NoError(t, registerErr)
 
 	deviceRow, lookupErr := eventStore.GetDeviceByTokenHash(context.Background(),
@@ -55,20 +55,34 @@ func TestRegisterDeviceIdempotentByFingerprint(t *testing.T) {
 
 	firstResult, firstErr := ingestService.RegisterDevice(ctx, RegisterInput{
 		Hostname: "macbook-pro", OS: "darwin", Arch: "arm64",
-		MachineFingerprint: "fp-abc-123"})
+		MachineFingerprint: "fp-abc-123"}, "")
 	require.NoError(t, firstErr)
 	assert.NotEmpty(t, firstResult.DeviceID)
 	assert.Regexp(t, `^a3d_[0-9a-f]{64}$`, firstResult.Token)
 
-	// 同指纹再次注册：设备身份不变、Token 轮换
+	// 无凭证的同指纹注册必须被拒（身份顶替防护），而不是无条件轮换
+	_, noCredentialErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "evil-host", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-abc-123"}, "")
+	require.Error(t, noCredentialErr)
+	assert.ErrorIs(t, noCredentialErr, store.ErrCredentialRequired)
+
+	// 凭证错误同样拒绝
+	_, wrongCredentialErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "evil-host", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-abc-123"}, "a3d_not-the-token")
+	require.Error(t, wrongCredentialErr)
+	assert.ErrorIs(t, wrongCredentialErr, store.ErrCredentialMismatch)
+
+	// 携带既有 Token 凭证：设备身份不变、Token 轮换
 	secondResult, secondErr := ingestService.RegisterDevice(ctx, RegisterInput{
 		Hostname: "macbook-pro", OS: "darwin", Arch: "arm64",
-		MachineFingerprint: "fp-abc-123"})
+		MachineFingerprint: "fp-abc-123"}, firstResult.Token)
 	require.NoError(t, secondErr)
 	assert.Equal(t, firstResult.DeviceID, secondResult.DeviceID)
 	assert.NotEqual(t, firstResult.Token, secondResult.Token)
 
-	// 旧 Token 已失效，新 Token 可反查（库存的是 sha256 摘要，需先哈希再查）
+	// 旧 Token 已失效，新 Token 可反查
 	_, oldTokenErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(firstResult.Token))
 	assert.ErrorIs(t, oldTokenErr, store.ErrNotFound)
 	newDeviceRow, newTokenErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(secondResult.Token))
@@ -76,8 +90,46 @@ func TestRegisterDeviceIdempotentByFingerprint(t *testing.T) {
 	assert.Equal(t, "macbook-pro", newDeviceRow.Hostname)
 
 	// 指纹为空拒绝
-	_, emptyErr := ingestService.RegisterDevice(ctx, RegisterInput{Hostname: "x"})
+	_, emptyErr := ingestService.RegisterDevice(ctx, RegisterInput{Hostname: "x"}, "")
 	assert.True(t, errors.Is(emptyErr, ErrEventInvalid))
+}
+
+func TestRegisterDeviceRestoresRevokedDeviceWithCredential(t *testing.T) {
+	ingestService, eventStore := newTestService(t)
+	ctx := context.Background()
+
+	firstResult, firstErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "macbook", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-restore-1"}, "")
+	require.NoError(t, firstErr)
+	require.NoError(t, eventStore.SetDeviceStatus(ctx, firstResult.DeviceID, "revoked"))
+
+	// 无凭证不能借被吊销设备的指纹上号
+	_, noCredentialErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "impostor", MachineFingerprint: "fp-restore-1"}, "")
+	assert.ErrorIs(t, noCredentialErr, store.ErrCredentialRequired)
+
+	// 携带旧凭证（吊销前发放）：设备主恢复上号，新建 active 行，吊销留痕保留
+	restoreResult, restoreErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "macbook", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-restore-1"}, firstResult.Token)
+	require.NoError(t, restoreErr)
+	assert.NotEqual(t, firstResult.DeviceID, restoreResult.DeviceID, "恢复上号应重建设备，不复活吊销行")
+
+	revokedDevice, revokedFindErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(firstResult.Token))
+	require.NoError(t, revokedFindErr)
+	assert.Equal(t, "revoked", revokedDevice.Status, "吊销留痕必须保留")
+	restoredDevice, restoredFindErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(restoreResult.Token))
+	require.NoError(t, restoredFindErr)
+	assert.Equal(t, "active", restoredDevice.Status)
+	assert.Equal(t, "fp-restore-1", restoredDevice.MachineFingerprint)
+
+	// 恢复上号后再带新凭证轮换：命中 active 新行，原地轮换
+	thirdResult, thirdErr := ingestService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "macbook", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-restore-1"}, restoreResult.Token)
+	require.NoError(t, thirdErr)
+	assert.Equal(t, restoreResult.DeviceID, thirdResult.DeviceID, "已恢复设备应原地轮换而非再建新行")
 }
 
 func TestRegisterDeviceDisabledWhenAutoRegisterOff(t *testing.T) {
@@ -85,7 +137,7 @@ func TestRegisterDeviceDisabledWhenAutoRegisterOff(t *testing.T) {
 	servetest.ResetTablesForTest(t, testPool, "devices")
 	closedService := NewService(store.NewStore(testPool), nil, false)
 	_, registerErr := closedService.RegisterDevice(context.Background(), RegisterInput{
-		MachineFingerprint: "fp-any"})
+		MachineFingerprint: "fp-any"}, "")
 	assert.ErrorIs(t, registerErr, ErrAutoRegisterDisabled)
 }
 

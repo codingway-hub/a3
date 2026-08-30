@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"os/user"
@@ -67,11 +68,19 @@ func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger 
 		return "", "", uploaderErr
 	}
 	machineFingerprint := buildMachineFingerprint()
+	// 本地无 Token 的自动注册不带凭证；服务端若已存在同指纹 active 设备会回 409
+	// （本地 Token 丢失场景），据此给出吊销/恢复指引而不是反复重试。
 	registrationResult, registerErr := uploaderClient.RegisterDevice(ctx, transport.DeviceInfo{
 		Hostname: shortHostname(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		MachineFingerprint: machineFingerprint,
-	})
+	}, "")
 	if registerErr != nil {
+		var rejectedErr *transport.NonRetryableError
+		if errors.As(registerErr, &rejectedErr) && rejectedErr.StatusCode == http.StatusConflict {
+			return "", "", fmt.Errorf(
+				"自动注册被拒：本机指纹已登记但本地无凭证（Token 已丢失？）。\n"+
+					"恢复路径：管理员在控制台吊销该设备后，重新执行 a3-agent register 即可重新上号")
+		}
 		return "", "", fmt.Errorf("自动注册失败: %w", registerErr)
 	}
 	if storeErr := storeDeviceIdentity(agentConfig.StateDir,
@@ -113,11 +122,24 @@ func registerCommand(flagArguments []string) int {
 	defer cancelTimeout()
 
 	fingerprint := buildMachineFingerprint()
+	// 重复注册必须携带既有 Token 作为凭证证明（同指纹只认凭证、不认指纹换发）
+	credentialToken := readStoredDeviceToken(stateDir)
 	registrationResult, registerErr := uploaderClient.RegisterDevice(ctxWithTimeout, transport.DeviceInfo{
 		Hostname: shortHostname(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		MachineFingerprint: fingerprint,
-	})
+	}, credentialToken)
 	if registerErr != nil {
+		if credentialToken == "" {
+			var rejectedErr *transport.NonRetryableError
+			if errors.As(registerErr, &rejectedErr) && rejectedErr.StatusCode == http.StatusConflict {
+				fmt.Fprintf(os.Stderr,
+					"注册失败：本机指纹已登记且需携带既有 Token 换发。\n"+
+						"本机未找到 Token（%s 不存在或已清空）。\n"+
+						"请恢复该文件后重试，或联系管理员在控制台吊销该设备后重新注册。\n",
+					storedFilePath(stateDir, deviceTokenFileName))
+				return 1
+			}
+		}
 		fmt.Fprintf(os.Stderr, "注册失败: %v\n", registerErr)
 		return 1
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/codingway-hub/a3/internal/server/auth"
+	"github.com/codingway-hub/a3/internal/server/store"
 )
 
 // Handler 是终端接入 HTTP 层：路由挂载与错误码映射。
@@ -31,19 +32,25 @@ func (handler *Handler) RegisterRoutes(router gin.IRouter) {
 	router.GET("/api/v1/devices/rules", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleDeviceRules)
 }
 
-// HandleRegister 处理设备注册；403=未开放自动注册，400=请求不合法。
+// HandleRegister 处理设备注册；403=未开放自动注册/凭证不符，409=需携带既有凭证，
+// 400=请求不合法。await 携带可选 Bearer 凭证：同指纹轮换必须证明持有既有 Token。
 func (handler *Handler) HandleRegister(routerCtx *gin.Context) {
 	var registerInput RegisterInput
 	if bindErr := routerCtx.ShouldBindJSON(&registerInput); bindErr != nil {
 		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
 		return
 	}
-	registerResult, registerErr := handler.service.RegisterDevice(routerCtx.Request.Context(), registerInput)
+	registerResult, registerErr := handler.service.RegisterDevice(
+		routerCtx.Request.Context(), registerInput, auth.BearerTokenFrom(routerCtx))
 	switch {
 	case registerErr == nil:
 		routerCtx.JSON(http.StatusOK, gin.H{"device_id": registerResult.DeviceID, "token": registerResult.Token})
 	case errors.Is(registerErr, ErrAutoRegisterDisabled):
 		routerCtx.JSON(http.StatusForbidden, gin.H{"error": "自动注册未开放，请联系管理员预生成 Token"})
+	case errors.Is(registerErr, store.ErrCredentialMismatch):
+		routerCtx.JSON(http.StatusForbidden, gin.H{"error": "携带的 Token 与设备不符，拒绝注册"})
+	case errors.Is(registerErr, store.ErrCredentialRequired):
+		routerCtx.JSON(http.StatusConflict, gin.H{"error": "设备已存在：注册须携带当前 Token 以证明身份（或联系管理员吊销后重新注册）"})
 	case errors.Is(registerErr, ErrEventInvalid):
 		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": registerErr.Error()})
 	default:

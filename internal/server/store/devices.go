@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Device 对应 devices 表一行。
@@ -26,11 +28,23 @@ type Device struct {
 
 const deviceColumns = `id, device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, first_seen_at, last_seen_at`
 
+// 注册凭证哨兵错误：轮换 Token 必须证明持有既有凭证，杜绝仅凭指纹顶替他人设备。
+var (
+	// ErrCredentialRequired 命中既有指纹但未携带凭证（或并发插入冲突），
+	// 调用方应携带既有 Token 重试，或先由管理员吊销后再注册。
+	ErrCredentialRequired = errors.New("credential required")
+	// ErrCredentialMismatch 携带的凭证与设备既有 Token 不符。
+	ErrCredentialMismatch = errors.New("credential mismatch")
+)
+
 // CreateDevice 写入一台新设备；id/status/时间戳由数据库生成后回填。
+// 空指纹归一为 'legacy-'||device_id：active 行指纹必须唯一（部分唯一索引），
+// 与 0007 迁移对历史空指纹行的兜底语义保持一致。
 func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 	if len(device.Plugins) == 0 {
 		device.Plugins = []byte(`[]`)
 	}
+	normalizeFingerprint(device)
 	return store.pool.QueryRow(ctx,
 		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -41,6 +55,105 @@ func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 }
 
 // FindDeviceIDByFingerprint 按机器指纹反查设备 ID；未注册过返回 ErrNotFound。
+
+// RegisterDeviceAtomic 原子完成「注册或凭证证明轮换」，单事务内对指纹行取锁，
+// 杜绝原先「查-改」两步间的并发竞态与无凭证顶替：
+//   - 指纹行不存在 → 插入新设备（active；status/时间戳回填 device）；
+//   - 指纹行存在且凭证匹配 → 无凭证返回 ErrCredentialRequired，凭证不符返回
+//     ErrCredentialMismatch；匹配则原地轮换 token_hash 并刷新心跳，设备身份不变；
+//   - 指纹行存在但已 revoked 且凭证匹配（设备主携带旧凭证恢复上号）→ 新建 active
+//     行，吊销旧行保留作为审计留痕（部分唯一索引下同指纹可并存 active/revoked）。
+//
+// 返回 (deviceID, created, error)：created=true 为新注册；配合 partial unique 索引，
+// 并发插入同指纹 active 行时由 23505 兜底并归一为 ErrCredentialRequired。
+func (store *Store) RegisterDeviceAtomic(ctx context.Context,
+	device *Device, claimedTokenHash string) (string, bool, error) {
+
+	tx, beginErr := store.pool.Begin(ctx)
+	if beginErr != nil {
+		return "", false, beginErr
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// 同一指纹可能并存 revoked 历史行与 active 行：优先取出 active，否则取最早登记行。
+	var existingDeviceID, storedTokenHash, deviceStatus string
+	scanErr := tx.QueryRow(ctx,
+		`SELECT device_id, token_hash, status FROM devices
+		  WHERE machine_fingerprint = $1
+		  ORDER BY (status = 'active') DESC, first_seen_at ASC LIMIT 1
+		  FOR UPDATE`,
+		device.MachineFingerprint,
+	).Scan(&existingDeviceID, &storedTokenHash, &deviceStatus)
+
+	switch {
+	case errors.Is(scanErr, pgx.ErrNoRows):
+		device.Status = "active"
+		if insertErr := insertDeviceInTx(ctx, tx, device); insertErr != nil {
+			return "", false, mapFingerprintConflict(insertErr)
+		}
+		return device.DeviceID, true, tx.Commit(ctx)
+
+	case scanErr != nil:
+		return "", false, scanErr
+	}
+
+	// 指纹行已存在：必须证书证明凭证。
+	if claimedTokenHash == "" {
+		return "", false, ErrCredentialRequired
+	}
+	if subtle.ConstantTimeCompare([]byte(claimedTokenHash), []byte(storedTokenHash)) != 1 {
+		return "", false, ErrCredentialMismatch
+	}
+
+	if deviceStatus == "active" {
+		// 凭证匹配：原地轮换，设备身份不变。
+		if _, updateErr := tx.Exec(ctx,
+			`UPDATE devices SET token_hash = $2, last_seen_at = now() WHERE device_id = $1`,
+			existingDeviceID, device.TokenHash); updateErr != nil {
+			return "", false, updateErr
+		}
+		return existingDeviceID, false, tx.Commit(ctx)
+	}
+
+	// revoked 历史行且凭证匹配：设备主恢复上号，新建 active 行保留留痕。
+	device.Status = "active"
+	if insertErr := insertDeviceInTx(ctx, tx, device); insertErr != nil {
+		return "", false, mapFingerprintConflict(insertErr)
+	}
+	return device.DeviceID, true, tx.Commit(ctx)
+}
+
+// insertDeviceInTx 在给定事务内插入设备并回填 id/status/时间戳。
+func insertDeviceInTx(ctx context.Context, tx pgx.Tx, device *Device) error {
+	if len(device.Plugins) == 0 {
+		device.Plugins = []byte(`[]`)
+	}
+	normalizeFingerprint(device)
+	return tx.QueryRow(ctx,
+		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, status, first_seen_at, last_seen_at`,
+		device.DeviceID, device.TokenHash, device.MachineFingerprint, device.Hostname, device.OS,
+		device.Arch, device.AgentVersion, device.Plugins, device.Status,
+	).Scan(&device.ID, &device.Status, &device.FirstSeenAt, &device.LastSeenAt)
+}
+
+// normalizeFingerprint 空指纹归一（legacy- + device_id），唯一约束下换新非注册路径。
+func normalizeFingerprint(device *Device) {
+	if device.MachineFingerprint == "" {
+		device.MachineFingerprint = "legacy-" + device.DeviceID
+	}
+}
+
+// mapFingerprintConflict 把并发插入同指纹 active 行触发的 23505 归一为凭证错误：
+// 竞态输家应携带既有凭证重试（请求方当前无凭证即申领新令牌失败，交给上层 409）。
+func mapFingerprintConflict(insertErr error) error {
+	var pgError *pgconn.PgError
+	if errors.As(insertErr, &pgError) && pgError.Code == "23505" {
+		return ErrCredentialRequired
+	}
+	return insertErr
+}
 func (store *Store) FindDeviceIDByFingerprint(ctx context.Context, machineFingerprint string) (string, error) {
 	var deviceID string
 	scanErr := store.pool.QueryRow(ctx,
@@ -92,6 +205,20 @@ func (store *Store) TouchDevice(ctx context.Context, deviceID string, agentVersi
 	commandTag, err := store.pool.Exec(ctx,
 		`UPDATE devices SET last_seen_at = now(), agent_version = $2, plugins = $3 WHERE device_id = $1`,
 		deviceID, agentVersion, pluginsJSON)
+	if err != nil {
+		return err
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetDeviceStatus 更新设备状态（active/revoked）；设备不存在返回 ErrNotFound。
+// 吊销后设备 Token 立即失效（鉴权中间件校验 status），历史审计数据原样保留。
+func (store *Store) SetDeviceStatus(ctx context.Context, deviceID string, status string) error {
+	commandTag, err := store.pool.Exec(ctx,
+		`UPDATE devices SET status = $2 WHERE device_id = $1`, deviceID, status)
 	if err != nil {
 		return err
 	}

@@ -143,7 +143,9 @@ func (uploader *Uploader) GetDeviceRules(ctx context.Context) (schema.DeviceRule
 }
 
 // RegisterDevice 注册设备并换取一次性下发的设备 Token。
-func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceInfo) (RegistrationResult, error) {
+// credentialToken 为既有设备 Token（可选）：同指纹注册时作为凭证证明
+// （附 Authorization 头），服务端校验通过才轮换；新设备首次注册传空串即可。
+func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceInfo, credentialToken string) (RegistrationResult, error) {
 	var registrationResult RegistrationResult
 	requestBody, marshalErr := json.Marshal(deviceInfo)
 	if marshalErr != nil {
@@ -156,6 +158,9 @@ func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceI
 		return registrationResult, fmt.Errorf("构建注册请求失败: %w", buildErr)
 	}
 	registerRequest.Header.Set("Content-Type", "application/json")
+	if credentialToken != "" {
+		registerRequest.Header.Set("Authorization", "Bearer "+credentialToken)
+	}
 
 	response, doErr := uploader.httpClient.Do(registerRequest)
 	if doErr != nil {

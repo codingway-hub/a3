@@ -76,30 +76,15 @@ func NewService(eventStore *store.Store, alertService *alert.Service, autoRegist
 	return &Service{eventStore: eventStore, alertService: alertService, autoRegister: autoRegister}
 }
 
-// RegisterDevice 注册设备：同指纹重复注册返回既有 device_id 并轮换新 Token。
-func (service *Service) RegisterDevice(ctx context.Context, registerInput RegisterInput) (*RegisterResult, error) {
+// RegisterDevice 注册设备：新指纹创建；同指纹则要求携带既有 Token 凭证证明身份后
+// 轮换（claimedToken 为空或与库中不符 → ErrCredentialRequired / ErrCredentialMismatch）。
+// 凭证语义：指纹不再足以换发他人 Token，杜绝无凭证顶替。
+func (service *Service) RegisterDevice(ctx context.Context, registerInput RegisterInput, claimedToken string) (*RegisterResult, error) {
 	if !service.autoRegister {
 		return nil, ErrAutoRegisterDisabled
 	}
 	if strings.TrimSpace(registerInput.MachineFingerprint) == "" {
 		return nil, fmt.Errorf("%w: machine_fingerprint 不能为空", ErrEventInvalid)
-	}
-
-	// 指纹已存在：换发新 Token，设备身份保持不变
-	existingDeviceID, findErr := service.eventStore.FindDeviceIDByFingerprint(ctx, registerInput.MachineFingerprint)
-	switch {
-	case findErr == nil:
-		newToken, tokenErr := auth.GenerateDeviceToken()
-		if tokenErr != nil {
-			return nil, tokenErr
-		}
-		if updateErr := service.eventStore.UpdateDeviceTokenHash(ctx, existingDeviceID,
-			auth.HashToken(newToken)); updateErr != nil {
-			return nil, updateErr
-		}
-		return &RegisterResult{DeviceID: existingDeviceID, Token: newToken}, nil
-	case !errors.Is(findErr, store.ErrNotFound):
-		return nil, findErr
 	}
 
 	newToken, tokenErr := auth.GenerateDeviceToken()
@@ -115,10 +100,16 @@ func (service *Service) RegisterDevice(ctx context.Context, registerInput Regist
 		Arch:               registerInput.Arch,
 		Status:             "active",
 	}
-	if createErr := service.eventStore.CreateDevice(ctx, device); createErr != nil {
-		return nil, createErr
+	claimedTokenHash := ""
+	if claimedToken != "" {
+		claimedTokenHash = auth.HashToken(claimedToken)
 	}
-	return &RegisterResult{DeviceID: device.DeviceID, Token: newToken}, nil
+
+	deviceID, _, registerErr := service.eventStore.RegisterDeviceAtomic(ctx, device, claimedTokenHash)
+	if registerErr != nil {
+		return nil, registerErr
+	}
+	return &RegisterResult{DeviceID: deviceID, Token: newToken}, nil
 }
 
 // SubmitEvents 处理一批事件：逐条校验→心跳→幂等落库→会话聚合→投递异步风险扫描。

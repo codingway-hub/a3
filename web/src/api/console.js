@@ -45,6 +45,11 @@ export function fetchDevices() {
   return apiClient.get('/devices')
 }
 
+// patchDeviceStatus 吊销（revoked）/恢复（active）设备；吊销即时生效（Token 鉴权中断），历史审计数据保留
+export function patchDeviceStatus(deviceId, status) {
+  return apiClient.patch(`/devices/${encodeURIComponent(deviceId)}`, { status })
+}
+
 // fetchRules 规则全集（含停用，不含已软删）
 export function fetchRules() {
   return apiClient.get('/rules')

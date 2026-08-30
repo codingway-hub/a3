@@ -80,6 +80,7 @@ func (api *Router) Setup() *gin.Engine {
 		protectedGroup.PATCH("/alerts/:alertID", api.HandleAcknowledgeAlert)
 		protectedGroup.GET("/alerts/export", api.HandleAlertsExport)
 		protectedGroup.GET("/devices", api.HandleListDevices)
+		protectedGroup.PATCH("/devices/:deviceID", api.HandlePatchDeviceStatus)
 		protectedGroup.GET("/rules", api.HandleListRules)
 		protectedGroup.POST("/rules", api.HandleCreateRule)
 		protectedGroup.PUT("/rules/:ruleID", api.HandleUpdateRule)

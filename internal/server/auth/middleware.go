@@ -16,7 +16,8 @@ const (
 )
 
 // RequireDeviceToken 校验 Bearer 设备 Token：哈希反查 devices 表，
-// 命中后把 *store.Device 挂入上下文；未命中/格式非法一律 401。
+// 命中且设备为 active 时把 *store.Device 挂入上下文；未命中/已吊销/格式非法一律 401。
+// 吊销即生效：revoked 设备的 Token 立即可用性切断，自有审计数据原样保留。
 func RequireDeviceToken(deviceStore *store.Store) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token, hasToken := extractBearerToken(ctx)
@@ -27,6 +28,10 @@ func RequireDeviceToken(deviceStore *store.Store) gin.HandlerFunc {
 		device, lookupErr := deviceStore.GetDeviceByTokenHash(ctx.Request.Context(), HashToken(token))
 		if lookupErr != nil {
 			ctx.AbortWithStatusJSON(401, gin.H{"error": "设备 Token 无效"})
+			return
+		}
+		if device.Status != "active" {
+			ctx.AbortWithStatusJSON(401, gin.H{"error": "设备已吊销，请联系管理员"})
 			return
 		}
 		ctx.Set(contextKeyDevice, device)
@@ -83,4 +88,14 @@ func extractBearerToken(ctx *gin.Context) (string, bool) {
 		return "", false
 	}
 	return token, true
+}
+
+// BearerTokenFrom 非强制提取 Authorization Bearer 凭证（如注册请求的可选凭证证明）；
+// 格式非法或缺失返回空串，不报错。
+func BearerTokenFrom(ctx *gin.Context) string {
+	token, hasToken := extractBearerToken(ctx)
+	if !hasToken {
+		return ""
+	}
+	return token
 }

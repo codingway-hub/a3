@@ -134,6 +134,14 @@ func TestRegisterDeviceParsesResultAndRejectsErrors(t *testing.T) {
 				_, _ = responseWriter.Write([]byte(`{"device_id":"dev-xyz","token":"a3d_fresh"}`))
 				return
 			}
+			if registerRequest["machine_fingerprint"] == "fp-auth" {
+				if request.Header.Get("Authorization") == "Bearer a3d_existing" {
+					_, _ = responseWriter.Write([]byte(`{"device_id":"dev-auth","token":"a3d_rotated"}`))
+					return
+				}
+				http.Error(responseWriter, `{"error":"设备已存在：注册须携带当前 Token"}`, http.StatusConflict)
+				return
+			}
 			http.Error(responseWriter, `{"error":"自动注册已关闭"}`, http.StatusForbidden)
 			return
 		}
@@ -143,14 +151,24 @@ func TestRegisterDeviceParsesResultAndRejectsErrors(t *testing.T) {
 
 	testUploader := newTestUploader(t, fakeServer.URL)
 	registration, registerErr := testUploader.RegisterDevice(context.Background(),
-		DeviceInfo{Hostname: "mac", OS: "darwin", Arch: "arm64", MachineFingerprint: "fp-ok"})
+		DeviceInfo{Hostname: "mac", OS: "darwin", Arch: "arm64", MachineFingerprint: "fp-ok"}, "")
 	require.NoError(t, registerErr)
 	assert.Equal(t, RegistrationResult{DeviceID: "dev-xyz", Token: "a3d_fresh"}, registration)
 
 	_, rejectedErr := testUploader.RegisterDevice(context.Background(),
-		DeviceInfo{Hostname: "mac", MachineFingerprint: "fp-closed"})
+		DeviceInfo{Hostname: "mac", MachineFingerprint: "fp-closed"}, "")
 	require.Error(t, rejectedErr)
 	assert.Contains(t, rejectedErr.Error(), "403")
+
+	// 凭证随注册请求透传：未携带 → 409，携带既有 Token → 轮换成功
+	_, noCredentialErr := testUploader.RegisterDevice(context.Background(),
+		DeviceInfo{Hostname: "mac", MachineFingerprint: "fp-auth"}, "")
+	require.Error(t, noCredentialErr)
+	assert.Contains(t, noCredentialErr.Error(), "409")
+	withCredentialRegistration, credentialErr := testUploader.RegisterDevice(context.Background(),
+		DeviceInfo{Hostname: "mac", MachineFingerprint: "fp-auth"}, "a3d_existing")
+	require.NoError(t, credentialErr)
+	assert.Equal(t, "a3d_rotated", withCredentialRegistration.Token)
 }
 
 func TestNewUploaderValidationAndInsecureFlag(t *testing.T) {

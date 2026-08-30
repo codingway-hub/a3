@@ -266,6 +266,45 @@ func TestDevicesAndRulesEndpoints(t *testing.T) {
 	require.NoError(t, test.eventStore.SetRuleEnabled(context.Background(), "dlp.jwt", true))
 }
 
+// TestDeviceStatusPatchRevokeAndRestore 控制台吊销/恢复设备闭环。
+func TestDeviceStatusPatchRevokeAndRestore(t *testing.T) {
+	test := newFixture(t)
+	seedSessionWithEvents(t, test.eventStore) // 已种 dev-api-1
+	test.login(t)
+
+	// 非法状态拒绝
+	badStatus := test.do(http.MethodPatch, "/api/v1/devices/dev-api-1",
+		`{"status":"purged"}`, test.jwtToken)
+	assert.Equal(t, http.StatusBadRequest, badStatus.Code)
+
+	// 吊销
+	revoked := test.do(http.MethodPatch, "/api/v1/devices/dev-api-1",
+		`{"status":"revoked"}`, test.jwtToken)
+	require.Equal(t, http.StatusOK, revoked.Code)
+	assert.Contains(t, revoked.Body.String(), `"status":"revoked"`)
+
+	deviceRow, lookupErr := test.eventStore.GetDeviceByTokenHash(context.Background(), "hash-dev-api-1")
+	require.NoError(t, lookupErr, "吊销只改状态，设备行不可丢失")
+	assert.Equal(t, "revoked", deviceRow.Status)
+
+	// 列表中可见吊销状态，且审计回放数据不受影响（会话仍在）
+	devices := test.do(http.MethodGet, "/api/v1/devices", "", test.jwtToken)
+	require.Equal(t, http.StatusOK, devices.Code)
+	assert.Contains(t, devices.Body.String(), `"status":"revoked"`)
+
+	// 恢复 active
+	restored := test.do(http.MethodPatch, "/api/v1/devices/dev-api-1",
+		`{"status":"active"}`, test.jwtToken)
+	require.Equal(t, http.StatusOK, restored.Code)
+	devicesAfter := test.do(http.MethodGet, "/api/v1/devices", "", test.jwtToken)
+	assert.Contains(t, devicesAfter.Body.String(), `"status":"active"`)
+
+	// 设备不存在 → 404
+	missing := test.do(http.MethodPatch, "/api/v1/devices/dev-no-such",
+		`{"status":"revoked"}`, test.jwtToken)
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+}
+
 // TestAlertsExportNotClampedByListPagination 守护导出数据完整性：
 // 列表接口钳制 pageSize≤100，导出必须全量返回（回归 I-1）。
 func TestAlertsExportNotClampedByListPagination(t *testing.T) {
