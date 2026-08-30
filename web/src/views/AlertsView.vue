@@ -33,10 +33,13 @@
       <el-table-column prop="rule_name" label="规则" width="180" show-overflow-tooltip />
       <el-table-column prop="device_id" label="设备" width="150" show-overflow-tooltip />
       <el-table-column prop="summary" label="摘要" min-width="260" show-overflow-tooltip />
-      <el-table-column label="状态" width="100" align="center">
+      <el-table-column label="状态" width="140" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.status === 'open'" type="warning" size="small" effect="plain">未确认</el-tag>
           <el-tag v-else type="success" size="small" effect="plain">已确认</el-tag>
+          <el-tooltip v-if="row.notified_at" content="该告警已通过 webhook 外送到通知渠道" placement="top">
+            <el-tag size="small" effect="plain" type="info" style="margin-left: 4px">已通知</el-tag>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="120" align="center">

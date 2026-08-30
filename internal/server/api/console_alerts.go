@@ -121,5 +121,8 @@ func alertToJSON(alertRow store.Alert) gin.H {
 	if alertRow.AcknowledgedAt != nil {
 		item["acknowledged_at"] = alertRow.AcknowledgedAt
 	}
+	if alertRow.NotifiedAt != nil {
+		item["notified_at"] = alertRow.NotifiedAt
+	}
 	return item
 }
