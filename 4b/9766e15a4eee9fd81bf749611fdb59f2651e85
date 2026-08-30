@@ -1,0 +1,43 @@
+internal/agent/core/config_test.go
+  s_8301e3490dd7cb::t_89fc4668b10587 184-220
+  s_8301e3490dd7cb::t_29203e597a1838 5-6
+cmd/agent/main_test.go
+  s_8301e3490dd7cb::t_b339a3bed8b3e0 61-77
+  s_8301e3490dd7cb::t_16d1444c54804b 4-5,9-11
+internal/agent/core/config.go
+  s_8301e3490dd7cb::t_a0fcc535fd37f2 103-121
+cmd/agent/service.go
+  s_8301e3490dd7cb::t_0d4662b7a7087c 1-6,8-10,13-154,156-247,249-252,261-266
+  s_8301e3490dd7cb::t_399065aa50a024 155
+  s_8301e3490dd7cb::t_09472d2b6fbe5d 248,253-260
+  s_8301e3490dd7cb::t_5c82aebba2c9ae 7,11-12
+cmd/agent/spool_replay_test.go
+  s_8301e3490dd7cb::t_399065aa50a024 220
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_c4ed2174a5db7c 117-119
+  s_8301e3490dd7cb::t_4fd3495aa452d5 50-55
+cmd/agent/service_test.go
+  s_8301e3490dd7cb::t_dcb6886236fe5f 23-28
+  s_8301e3490dd7cb::t_0bc5479c513f47 1-22,29-95
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_399065aa50a024 87
+  s_8301e3490dd7cb::t_29cea3ecf6991c 97-100
+  s_8301e3490dd7cb::t_19428a9323bf2c 33-38
+  s_8301e3490dd7cb::t_b5fe727841c690 160-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4b9766e15a4eee9fd81bf749611fdb59f2651e85",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
