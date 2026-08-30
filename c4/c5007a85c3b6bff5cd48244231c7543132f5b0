@@ -1,0 +1,28 @@
+web/src/api/console.js
+  s_8301e3490dd7cb::t_0ee58fa40ad58c 83-87
+web/src/router/index.js
+  s_8301e3490dd7cb::t_e2f1d73b7d685b 17-22
+  s_8301e3490dd7cb::t_1fd22f2e7570c4 64-68
+  s_8301e3490dd7cb::t_790a18c00695c3 16
+  s_8301e3490dd7cb::t_37b02672a073b9 69
+web/src/views/SetupGuideView.vue
+  s_8301e3490dd7cb::t_2c30f1ed601949 1-169
+web/src/layout/MainLayout.vue
+  s_8301e3490dd7cb::t_527f6d812aaacd 33-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c4c5007a85c3b6bff5cd48244231c7543132f5b0",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
