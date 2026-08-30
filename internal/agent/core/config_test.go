@@ -62,13 +62,15 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 	baseConfig := Default("/Users/demo")
 
 	envMap := map[string]string{
-		"A3_SERVER_URL":               "http://127.0.0.1:18080",
-		"A3_DEVICE_TOKEN":             "a3d_abc123",
-		"A3_BATCH_SIZE":               "50",
-		"A3_FLUSH_INTERVAL":           "5",
-		"A3_MASK_ENABLED":             "false",
-		"A3_INSECURE_SKIP_TLS_VERIFY": "true",
-		"A3_LOG_LEVEL":                "debug",
+		"A3_SERVER_URL":                 "http://127.0.0.1:18080",
+		"A3_DEVICE_TOKEN":               "a3d_abc123",
+		"A3_BATCH_SIZE":                 "50",
+		"A3_FLUSH_INTERVAL":             "5",
+		"A3_MASK_ENABLED":               "false",
+		"A3_INSECURE_SKIP_TLS_VERIFY":   "true",
+		"A3_LOG_LEVEL":                  "debug",
+		"A3_SPOOL_MAX_BYTES":            "268435456",
+		"A3_SPOOL_QUARANTINE_MAX_BYTES": "67108864",
 	}
 	baseConfig.ApplyEnv(func(envName string) string { return envMap[envName] })
 
@@ -79,6 +81,8 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 	assert.False(t, baseConfig.MaskEnabled)
 	assert.True(t, baseConfig.InsecureTLS)
 	assert.Equal(t, "debug", baseConfig.LogLevel)
+	assert.Equal(t, int64(268435456), baseConfig.SpoolMaxBytes, "A3_SPOOL_MAX_BYTES 应解析为字节数")
+	assert.Equal(t, int64(67108864), baseConfig.SpoolQuarantineMaxBytes, "A3_SPOOL_QUARANTINE_MAX_BYTES 应解析为字节数")
 	assert.NoError(t, baseConfig.Validate())
 }
 
@@ -141,6 +145,26 @@ func TestPluginsSelectionAndValidation(t *testing.T) {
 	emptyErr := emptyConfig.Validate()
 	require.Error(t, emptyErr)
 	assert.Contains(t, emptyErr.Error(), "plugins 选择不能为空")
+}
+
+func TestSpoolByteSizeLimitsValidation(t *testing.T) {
+	validConfig := Default("/Users/demo")
+	validConfig.ServerURL = "http://127.0.0.1:8080"
+
+	negativeTotal := validConfig
+	negativeTotal.SpoolMaxBytes = -1
+	negativeTotalErr := negativeTotal.Validate()
+	require.Error(t, negativeTotalErr)
+	assert.Contains(t, negativeTotalErr.Error(), "spool_max_bytes")
+
+	negativeQuarantine := validConfig
+	negativeQuarantine.SpoolQuarantineMaxBytes = -42
+	negativeQuarantineErr := negativeQuarantine.Validate()
+	require.Error(t, negativeQuarantineErr)
+	assert.Contains(t, negativeQuarantineErr.Error(), "spool_quarantine_max_bytes")
+
+	zeroMeansDefault := validConfig
+	require.NoError(t, zeroMeansDefault.Validate(), "0 表示取默认上限，属合法值")
 }
 
 func TestNewLoggerLevelMapping(t *testing.T) {

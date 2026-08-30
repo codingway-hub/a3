@@ -169,7 +169,8 @@ func hookCommand(flagArguments []string) int {
 		agentConfig = core.Default(homeDir)
 		agentConfig.ApplyEnv(os.Getenv)
 	}
-	spoolQueue, spoolErr := spool.New(agentConfig.SpoolDir, 0)
+	spoolQueue, spoolErr := spool.NewWithLimits(agentConfig.SpoolDir,
+		agentConfig.SpoolMaxBytes, agentConfig.SpoolQuarantineMaxBytes)
 	if spoolErr != nil {
 		fmt.Fprintf(os.Stderr, "a3 hook 缓存不可用，已放行: %v\n", spoolErr)
 		return 0

@@ -73,7 +73,8 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 		logger.Error("构建上报客户端失败", slog.String("error", uploaderErr.Error()))
 		return 1
 	}
-	spoolQueue, spoolErr := spool.New(agentConfig.SpoolDir, 0)
+	spoolQueue, spoolErr := spool.NewWithLimits(agentConfig.SpoolDir,
+		agentConfig.SpoolMaxBytes, agentConfig.SpoolQuarantineMaxBytes)
 	if spoolErr != nil {
 		logger.Error("初始化断网缓存失败", slog.String("error", spoolErr.Error()))
 		return 1

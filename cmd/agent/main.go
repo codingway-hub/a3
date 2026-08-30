@@ -74,6 +74,8 @@ func loadAgentConfig(flagArguments []string) (core.Config, error) {
 	flagSet.StringVar(&agentConfig.ServerURL, "server", agentConfig.ServerURL, "服务端地址，如 http://127.0.0.1:8080")
 	flagSet.StringVar(&agentConfig.DeviceToken, "token", agentConfig.DeviceToken, "设备 Token（a3d_ 开头）")
 	flagSet.StringVar(&agentConfig.SpoolDir, "spool-dir", agentConfig.SpoolDir, "断网缓存目录")
+	flagSet.Int64Var(&agentConfig.SpoolMaxBytes, "spool-max-bytes", agentConfig.SpoolMaxBytes, "断网缓存总容量上限（含在途租约，0=默认512MB）")
+	flagSet.Int64Var(&agentConfig.SpoolQuarantineMaxBytes, "spool-quarantine-max-bytes", agentConfig.SpoolQuarantineMaxBytes, "断网缓存隔离区容量上限（0=默认128MB）")
 	flagSet.StringVar(&agentConfig.StateDir, "state-dir", agentConfig.StateDir, "状态目录")
 	flagSet.IntVar(&agentConfig.BatchSize, "batch-size", agentConfig.BatchSize, "单批上报条数上限")
 	flushSeconds := flagSet.Int("flush-interval-seconds", int(agentConfig.FlushInterval/time.Second), "批量化冲刷间隔（秒）")

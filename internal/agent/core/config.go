@@ -21,16 +21,18 @@ const PluginAll = "all"
 
 // Config 终端采集器运行配置；CLI flag 优先级高于环境变量，环境变量高于默认值。
 type Config struct {
-	ServerURL     string        // 服务端地址（http/https）
-	DeviceToken   string        // 设备 Token（a3d_ 前缀）；空表示未注册，run 时按策略自动注册
-	SpoolDir      string        // 断网缓存队列目录
-	StateDir      string        // 状态目录（offsets 等断点续传状态）
-	BatchSize     int           // 单批上报事件数上限（1~500）
-	FlushInterval time.Duration // 批量化冲刷间隔
-	MaskEnabled   bool          // 终端侧脱敏开关
-	InsecureTLS   bool          // 跳过 TLS 证书校验（仅自签名单机部署场景使用）
-	LogLevel      string        // 日志级别：debug|info|warn|error
-	Plugins       []string      // 启用的插件名列表；[all] 表示全部内置插件（默认）
+	ServerURL               string        // 服务端地址（http/https）
+	DeviceToken             string        // 设备 Token（a3d_ 前缀）；空表示未注册，run 时按策略自动注册
+	SpoolDir                string        // 断网缓存队列目录
+	StateDir                string        // 状态目录（offsets 等断点续传状态）
+	SpoolMaxBytes           int64         // 断网缓存总容量上限（含在途租约）；0=默认 512MB
+	SpoolQuarantineMaxBytes int64         // 断网缓存隔离区容量上限；0=默认 128MB
+	BatchSize               int           // 单批上报事件数上限（1~500）
+	FlushInterval           time.Duration // 批量化冲刷间隔
+	MaskEnabled             bool          // 终端侧脱敏开关
+	InsecureTLS             bool          // 跳过 TLS 证书校验（仅自签名单机部署场景使用）
+	LogLevel                string        // 日志级别：debug|info|warn|error
+	Plugins                 []string      // 启用的插件名列表；[all] 表示全部内置插件（默认）
 }
 
 // Default 返回基于用户主目录推导的默认配置。
@@ -60,6 +62,16 @@ func (config *Config) ApplyEnv(getenv func(string) string) {
 	}
 	if spoolDir := getenv("A3_SPOOL_DIR"); spoolDir != "" {
 		config.SpoolDir = spoolDir
+	}
+	if spoolMaxBytesText := getenv("A3_SPOOL_MAX_BYTES"); spoolMaxBytesText != "" {
+		if spoolMaxBytes, parseErr := strconv.ParseInt(spoolMaxBytesText, 10, 64); parseErr == nil {
+			config.SpoolMaxBytes = spoolMaxBytes
+		}
+	}
+	if quarantineMaxBytesText := getenv("A3_SPOOL_QUARANTINE_MAX_BYTES"); quarantineMaxBytesText != "" {
+		if quarantineMaxBytes, parseErr := strconv.ParseInt(quarantineMaxBytesText, 10, 64); parseErr == nil {
+			config.SpoolQuarantineMaxBytes = quarantineMaxBytes
+		}
 	}
 	if stateDir := getenv("A3_STATE_DIR"); stateDir != "" {
 		config.StateDir = stateDir
@@ -115,6 +127,12 @@ func (config Config) Validate() error {
 	}
 	if config.SpoolDir == "" {
 		return fmt.Errorf("spool_dir 不能为空")
+	}
+	if config.SpoolMaxBytes < 0 {
+		return fmt.Errorf("spool_max_bytes 不能为负: %d（0 表示默认 512MB）", config.SpoolMaxBytes)
+	}
+	if config.SpoolQuarantineMaxBytes < 0 {
+		return fmt.Errorf("spool_quarantine_max_bytes 不能为负: %d（0 表示默认 128MB）", config.SpoolQuarantineMaxBytes)
 	}
 	if config.StateDir == "" {
 		return fmt.Errorf("state_dir 不能为空")
