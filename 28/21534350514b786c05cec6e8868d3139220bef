@@ -1,0 +1,20 @@
+docs/ROADMAP.md
+  s_8301e3490dd7cb::t_39a7dfe6837d58 28
+  s_8301e3490dd7cb::t_a0df9fe17743e7 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2821534350514b786c05cec6e8868d3139220bef",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
