@@ -51,13 +51,31 @@ upsert_env() {
   fi
 }
 
-# —— 管理员口令为空则随机生成并回显 ——
-ADMIN_PASSWORD_CURRENT="$(grep '^A3_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+# —— 弱默认/留空的密钥口令随机生成回显（数据库口令、JWT 签名密钥、管理员口令） ——
+generate_secret() {
+  openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'
+}
+
 GENERATED_PASSWORD_NOTE=""
+ADMIN_PASSWORD_CURRENT="$(grep '^A3_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
 if [ -z "$ADMIN_PASSWORD_CURRENT" ]; then
-  GENERATED_PASSWORD="$(openssl rand -hex 8 2>/dev/null || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-16)"
-  upsert_env "A3_ADMIN_PASSWORD" "$GENERATED_PASSWORD"
+  upsert_env "A3_ADMIN_PASSWORD" "$(generate_secret | cut -c1-16)"
   GENERATED_PASSWORD_NOTE="yes"
+fi
+
+GENERATED_DB_PASSWORD_NOTE="no"
+if grep -q '^A3_POSTGRES_PASSWORD=a3-change-me$' "$ENV_FILE"; then
+  upsert_env "A3_POSTGRES_PASSWORD" "$(generate_secret)"
+  GENERATED_DB_PASSWORD_NOTE="yes"
+  # 弱默认从未初始化过库才能安全替换；若 postgres 卷已用弱口令初始化，compose 改口令
+  # 不会作用于已初始化卷（见 README），此时需进容器 ALTER USER——一并提示。
+fi
+
+GENERATED_JWT_NOTE="no"
+JWT_CURRENT="$(grep '^A3_JWT_SECRET=' "$ENV_FILE" | cut -d= -f2-)"
+if [ -z "$JWT_CURRENT" ]; then
+  upsert_env "A3_JWT_SECRET" "$(generate_secret)"
+  GENERATED_JWT_NOTE="yes"
 fi
 
 # —— 公开地址与端口 ——
@@ -98,6 +116,12 @@ echo "   控制台:   $PUBLIC_URL"
 echo "   接入指南: $PUBLIC_URL/setup-guide  ← 把这个链接发给采集端用户"
 if [ "$GENERATED_PASSWORD_NOTE" = "yes" ]; then
   echo "   管理员口令（随机生成，请尽快登录修改）: $(grep '^A3_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+fi
+if [ "$GENERATED_DB_PASSWORD_NOTE" = "yes" ]; then
+  echo "   数据库口令已由弱默认随机替换（postgres 卷首次初始化时生效）"
+fi
+if [ "$GENERATED_JWT_NOTE" = "yes" ]; then
+  echo "   JWT 签名密钥已随机生成并写入 .env（重启后控制台登录态保持有效）"
 fi
 echo
 echo "⚠️  已开放自助注册（A3_ALLOW_AUTO_REGISTER=true）：能连到 $PUBLIC_URL 的设备"

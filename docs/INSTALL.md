@@ -25,12 +25,13 @@ git clone <仓库地址> && cd a3
 - **控制台** `http://aa.bb.com:12345` —— 用 `admin` + 终端打印的口令登录
 - **接入指南** `http://aa.bb.com:12345/setup-guide` —— 把这个链接发给采集端用户
 
-> 手动方式（备用）：`cp deploy/.env.example deploy/.env` 编辑后 `make compose-up`。
+脚本同时自动处理：管理员口令/数据库口令/JWT 密钥留空或弱默认时随机生成并回显、
+开放自助注册（附关闭方法）、非本机地址自动开放对外监听（并提醒配置 TLS）。
 
 ### 自助注册说明
 
 一键安装脚本已自动开放自助注册（`A3_ALLOW_AUTO_REGISTER=true`）并打印关闭方法——
-能连到服务端的设备均可自行注册接入，收齐设备后建议关闭。手动部署时需自行在
+能连到服务端的设备均可自行注册接入，收齐设备后建议关闭。未用脚本部署时需自行在
 `deploy/.env` 设置后再 `docker compose -f deploy/docker-compose.yml up -d` 生效。
 
 ---
@@ -69,16 +70,6 @@ tail -f ~/.a3/agent.log               # 看采集器日志
 ~/.a3/bin/a3-agent uninstall-hook     # 卸载拦截 Hook
 ```
 
-### 高级：手动安装（不用脚本）
-
-从管理员处拿到对应平台二进制（`make release-agent` 产出在 `bin/release/`）后：
-
-```bash
-./a3-agent register --server http://aa.bb.com:12345   # ① 登记
-./a3-agent install-hook                               # ② 装拦截开关
-./a3-agent install-service                            # ③ 装常驻服务
-```
-
 ---
 
 ## 三、遇到问题
@@ -86,9 +77,9 @@ tail -f ~/.a3/agent.log               # 看采集器日志
 | 现象 | 处理 |
 | --- | --- |
 | 打不开控制台/指南页 | 确认容器在跑：`docker compose -f deploy/docker-compose.yml ps`；看日志：`docker compose -f deploy/docker-compose.yml logs server` |
-| 安装命令提示 403/无权限 | 服务端自动注册开关没开，管理员按上文「让用户能自助接入」开启 |
-| 安装命令提示下载为空 | 服务端未配置产物目录：容器部署镜像内已内置；二进制直跑需设 `A3_AGENT_DIST=bin/release` 并确保先跑过 `make release-agent` |
-| `register` 提示需携带既有 Token | 这台机器之前登记过：命令会自动读本机旧 Token 重试；Token 丢了就找管理员在控制台「设备」页吊销它，再重新跑安装命令 |
+| 安装命令提示 403/无权限 | 服务端自动注册开关没开：管理员在 `deploy/.env` 设置 `A3_ALLOW_AUTO_REGISTER=true` 后 `docker compose -f deploy/docker-compose.yml up -d` |
+| 安装命令提示下载为空 | 服务端未配置产物目录：容器部署镜像内已内置，无需操作；二进制直跑需设 `A3_AGENT_DIST=bin/release` 并先跑 `make release-agent` |
+| 安装命令提示需携带既有 Token | 这台机器之前登记过：命令会自动读本机旧 Token 重试；Token 丢了就找管理员在控制台「设备」页吊销它，再重跑安装命令 |
 | 被拦的命令是误报 | 找管理员在「规则」页停用或调整对应规则，改动即时生效 |
 
 更详细的配置项、架构与隐私说明见 [README](../README.md)。

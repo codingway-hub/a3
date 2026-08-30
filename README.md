@@ -31,17 +31,13 @@ a3 由两部分组成：**装在开发机上的采集器**（记录 + 把关）�
 | **终端用户** | 开发机上装了采集器的人 | 装一次即可，平时正常写代码，几乎感觉不到 a3 存在 |
 | **管理员** | 能登录网页控制台、看数据和管规则的人（团队/安全负责人） | 登录控制台，看概览与会话、处置告警、调整规则 |
 
-### 终端用户：三步装好，之后「被拦截」才需要你知道
+### 终端用户：一条命令装好，之后「被拦截」才需要你知道
+
+管理员发来接入指南页链接后，照页面复制执行一条命令（脚本自动登记设备、装拦截开关、
+装常驻服务，断网自动缓存，恢复后补传）：
 
 ```bash
-# ① 向服务端登记这台机器（首次，会拿到设备身份和 Token，存到 ~/.a3/）
-./a3-agent register --server http://<服务端地址>:8080
-
-# ② 安装拦截开关（让高危命令在发生前被拦下）
-./a3-agent install-hook
-
-# ③ 常驻采集与上报（断网自动缓存，恢复后补传）
-./a3-agent run
+curl http://<服务端地址>/install.sh | sh
 ```
 
 装完就正常开工。三站跑通后采集器开始后台工作：Claude Code / Codex 的每一次对话、每一次工具调用都会自动记录；
@@ -98,8 +94,8 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 ./deploy/install-server.sh http://aa.bb.com:12345
 ```
 
-> 一键安装（install-server.sh）会自动开放自助注册并打印关闭方法；手动部署时若想让用户
-> 免登记直接接入，在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true` 再 `make compose-up`。
+> 一键安装（install-server.sh）会自动开放自助注册并打印关闭方法；未用脚本部署时，
+> 在 `deploy/.env` 中把 `A3_ALLOW_AUTO_REGISTER` 改为 `true` 再 `make compose-up`。
 
 停止与清理：`make compose-down`（数据保留在 docker volume `a3_pgdata`）。
 
@@ -124,29 +120,18 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 
 ## 客户端接入
 
-**一条命令方式**：管理员把控制台「接入指南」页（`http://<服务端地址>/setup-guide`，免登录）
+管理员把控制台「接入指南」页（`http://<服务端地址>/setup-guide`，免登录）
 发给采集端用户，用户照页面复制执行 `curl http://<服务端地址>/install.sh | sh` 即可——脚本自动
 识别平台、下载采集器（服务端镜像内已内置五平台产物）、注册、装 Hook、装常驻服务。
 指南页会在注册开关关闭或产物未就绪时给出警示。详见[安装说明](docs/INSTALL.md)。
 
-### 手动方式
+接入机制说明：同指纹重复注册需带旧 Token 作凭证（脚本与命令自动读取本机 `~/.a3/device-token`）：
+凭证匹配才轮换新 Token 且原 Token 即刻失效；凭证缺失/不匹配即拒绝，防设备被顶替。Token 不慎
+丢失时，由管理员在控制台吊销该设备后重跑安装命令建立新身份。自签名 HTTPS 场景参见安装说明。
 
-采集器二进制从 `make release-agent` 产物（`bin/release/a3-agent-*`）按平台选取，或源码构建 `make build-agent`。
+服务端注册开关关闭时注册返回 403，由管理员在 `deploy/.env` 临时开放或预先登记设备。
 
-```bash
-./a3-agent register --server http://a3.example.com:8080   # 注册并保存 Token/设备身份到 ~/.a3/
-./a3-agent install-hook                                   # 安装 PreToolUse Hook
-./a3-agent install-service                                # 安装常驻服务（开机自启、崩溃拉起）
-./a3-agent run                                            # 常驻采集与上报（无 Token 时报错，先 register）
-```
-
-同指纹重复注册需带旧 Token 作凭证（命令自动读取本机 `~/.a3/device-token`）：凭证匹配才轮换新
-Token 且原 Token 即刻失效；凭证缺失/不匹配即拒绝，防设备被顶替。Token 不慎丢失时，由管理员在
-控制台吊销该设备后重新 `register` 建立新身份。自签名 HTTPS 场景加 `--insecure-skip-tls-verify`。
-
-服务端注册开关关闭时 `register` 返回 403，由管理员在 `deploy/.env` 临时开放或预先登记设备。
-
-已登记设备也可用环境变量固定凭据运行：
+高级运维（已登记设备用环境变量固定凭据运行）：
 
 ```bash
 export A3_SERVER_URL=https://a3.example.internal
@@ -154,9 +139,9 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 ./a3-agent run
 ```
 
-> 注意：显式提供 Token 时要求本机已有配套设备身份文件（此前在该机器上执行过 `register`），
+> 注意：显式提供 Token 时要求本机已有配套设备身份文件（此前在该机器上执行过安装命令），
 > 否则启动即报错提示重新登记——避免事件因归属校验失败被整批静默丢弃。
-> 把凭据迁移到新机器时请在新机器上重新执行一次 `register`。
+> 把凭据迁移到新机器时请在新机器上重新执行一次安装命令。
 
 采集器常用环境变量：
 
