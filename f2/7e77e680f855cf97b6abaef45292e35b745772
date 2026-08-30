@@ -1,0 +1,36 @@
+internal/server/alert/service.go
+  s_8301e3490dd7cb::t_7126c2eb59dee5 184
+internal/server/store/events_test.go
+  s_8301e3490dd7cb::t_f24922557fb4e8 101-102,115-116
+  s_8301e3490dd7cb::t_9fc7a107a3d279 168-169
+  s_8301e3490dd7cb::t_63bb9fa9d06faa 207-302
+internal/server/ingest/service.go
+  s_8301e3490dd7cb::t_a93ad32a0afa71 209
+  s_8301e3490dd7cb::t_d094005eda3857 145,149-151,156,173-177,179-181,183-185,187-188,190-192,195-203,206
+internal/server/store/sessions.go
+  s_8301e3490dd7cb::t_015339a1bf0110 38-48,52,58-72
+  s_8301e3490dd7cb::t_c2582d084bf93f 73-75
+internal/server/store/scan.go
+  s_8301e3490dd7cb::t_3f2a3d12786c17 20-23,31,46-48
+cmd/server/main.go
+  s_8301e3490dd7cb::t_2d2379c8119efa 130-139
+internal/server/store/events.go
+  s_8301e3490dd7cb::t_1806e27f2430f7 26-27,49
+  s_8301e3490dd7cb::t_927c8d9b21b3c1 65-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f27e77e680f855cf97b6abaef45292e35b745772",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
