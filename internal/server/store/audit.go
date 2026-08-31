@@ -24,7 +24,9 @@ const (
 
 	auditTargetRule   = "rule"
 	auditTargetDevice = "device"
-	auditTargetUser   = "user"
+
+	// AuditTargetUser 用户账号类审计的目标类型（api 层用户管理留痕用）。
+	AuditTargetUser = "user"
 )
 
 // AuditEntry 对应 audit_log 表一行；Before/After 为变更前后 JSONB 快照原文。

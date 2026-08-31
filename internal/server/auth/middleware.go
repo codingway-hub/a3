@@ -8,10 +8,11 @@ import (
 	"github.com/codingway-hub/a3/internal/server/store"
 )
 
-// contextKeyDevice / contextKeyUsername 是 gin.Context 存取鉴权主体的键名。
+// contextKeyDevice / contextKeyUsername / contextKeyRole 是 gin.Context 存取鉴权主体的键名。
 const (
 	contextKeyDevice    = "auth.device"
 	contextKeyUsername  = "auth.username"
+	contextKeyRole      = "auth.role"
 	authorizationPrefix = "Bearer "
 )
 
@@ -39,7 +40,7 @@ func RequireDeviceToken(deviceStore *store.Store) gin.HandlerFunc {
 	}
 }
 
-// RequireJWT 校验控制台 JWT；通过后把用户名挂入上下文。
+// RequireJWT 校验控制台 JWT；通过后把用户名与角色挂入上下文。
 func RequireJWT(secret string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token, hasToken := extractBearerToken(ctx)
@@ -47,12 +48,30 @@ func RequireJWT(secret string) gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(401, gin.H{"error": "未登录"})
 			return
 		}
-		username, verifyErr := VerifyJWT(secret, token)
+		username, role, verifyErr := VerifyJWT(secret, token)
 		if verifyErr != nil {
 			ctx.AbortWithStatusJSON(401, gin.H{"error": "登录已失效，请重新登录"})
 			return
 		}
 		ctx.Set(contextKeyUsername, username)
+		ctx.Set(contextKeyRole, role)
+		ctx.Next()
+	}
+}
+
+// RequireRole 限制控制台角色：JWT 上下文中的 role 不在允许集合内一律 403。
+// 已知限制：JWT 无状态，停用/降级对已签发 token 在过期（≤8h）前不生效，一期接受。
+func RequireRole(allowedRoles ...string) gin.HandlerFunc {
+	allowedSet := make(map[string]bool, len(allowedRoles))
+	for _, allowedRole := range allowedRoles {
+		allowedSet[allowedRole] = true
+	}
+	return func(ctx *gin.Context) {
+		role, hasRole := RoleFrom(ctx)
+		if !hasRole || !allowedSet[role] {
+			ctx.AbortWithStatusJSON(403, gin.H{"error": "权限不足"})
+			return
+		}
 		ctx.Next()
 	}
 }
@@ -75,6 +94,16 @@ func UsernameFrom(ctx *gin.Context) (string, bool) {
 	}
 	username, ok := value.(string)
 	return username, ok
+}
+
+// RoleFrom 返回中间件挂载的控制台角色。
+func RoleFrom(ctx *gin.Context) (string, bool) {
+	value, exists := ctx.Get(contextKeyRole)
+	if !exists {
+		return "", false
+	}
+	role, ok := value.(string)
+	return role, ok
 }
 
 // extractBearerToken 从 Authorization 头提取 Bearer 凭证。

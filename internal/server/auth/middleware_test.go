@@ -61,21 +61,21 @@ func TestRequireJWTMiddleware(t *testing.T) {
 	assert.Equal(t, 401, recorder.Code)
 
 	// 合法 Token → 200
-	validToken, signErr := SignJWT(jwtSecret, "admin", time.Hour)
+	validToken, signErr := SignJWT(jwtSecret, "admin", "admin", time.Hour)
 	require.NoError(t, signErr)
 	recorder, _ = performRequest(router, http.MethodGet, "/probe",
 		map[string]string{"Authorization": "Bearer " + validToken})
 	assert.Equal(t, 200, recorder.Code)
 
 	// 伪造 Token → 401
-	forgedToken, signErr := SignJWT("another-secret", "admin", time.Hour)
+	forgedToken, signErr := SignJWT("another-secret", "admin", "admin", time.Hour)
 	require.NoError(t, signErr)
 	recorder, _ = performRequest(router, http.MethodGet, "/probe",
 		map[string]string{"Authorization": "Bearer " + forgedToken})
 	assert.Equal(t, 401, recorder.Code)
 
 	// 过期 Token → 401
-	expiredToken, signErr := SignJWT(jwtSecret, "admin", -time.Minute)
+	expiredToken, signErr := SignJWT(jwtSecret, "admin", "admin", -time.Minute)
 	require.NoError(t, signErr)
 	recorder, _ = performRequest(router, http.MethodGet, "/probe",
 		map[string]string{"Authorization": "Bearer " + expiredToken})
@@ -153,4 +153,40 @@ func TestRequireDeviceTokenRevokedDeviceBlocked(t *testing.T) {
 	deviceRow, lookupErr := deviceStore.GetDeviceByTokenHash(context.Background(), HashToken(plaintextToken))
 	require.NoError(t, lookupErr)
 	assert.Equal(t, "revoked", deviceRow.Status, "吊销仅拦截访问路径，设备行与审计数据必须保留")
+}
+
+func TestRequireRoleMiddleware(t *testing.T) {
+	const jwtSecret = "unit-test-secret"
+	roleRouter := gin.New()
+	roleRouter.GET("/admin-only",
+		RequireJWT(jwtSecret), RequireRole("admin"),
+		func(ctx *gin.Context) {
+			username, _ := UsernameFrom(ctx)
+			role, _ := RoleFrom(ctx)
+			ctx.JSON(200, gin.H{"username": username, "role": role})
+		})
+
+	// admin Token → 200，且上下文角色可取回
+	adminToken, signErr := SignJWT(jwtSecret, "boss", "admin", time.Hour)
+	require.NoError(t, signErr)
+	adminRecorder, adminBody := performRequest(roleRouter, http.MethodGet, "/admin-only",
+		map[string]string{"Authorization": "Bearer " + adminToken})
+	assert.Equal(t, 200, adminRecorder.Code)
+	assert.Equal(t, "admin", adminBody["role"])
+
+	// auditor Token 命中 admin-only → 403
+	auditorToken, auditorSignErr := SignJWT(jwtSecret, "aud", "auditor", time.Hour)
+	require.NoError(t, auditorSignErr)
+	auditorRecorder, auditorBody := performRequest(roleRouter, http.MethodGet, "/admin-only",
+		map[string]string{"Authorization": "Bearer " + auditorToken})
+	assert.Equal(t, 403, auditorRecorder.Code)
+	assert.Equal(t, "权限不足", auditorBody["error"])
+
+	// 多角色允许集合：auditor 在 {admin, auditor} 中放行
+	sharedRouter := gin.New()
+	sharedRouter.GET("/shared", RequireJWT(jwtSecret), RequireRole("admin", "auditor"),
+		func(ctx *gin.Context) { ctx.JSON(200, gin.H{"ok": true}) })
+	sharedRecorder, _ := performRequest(sharedRouter, http.MethodGet, "/shared",
+		map[string]string{"Authorization": "Bearer " + auditorToken})
+	assert.Equal(t, 200, sharedRecorder.Code)
 }

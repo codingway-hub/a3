@@ -42,24 +42,41 @@ func newFixture(t *testing.T) *fixture {
 	gin.SetMode(gin.TestMode)
 
 	testPool := servetest.NewTestPool(t)
-	servetest.ResetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices")
+	servetest.ResetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices", "admin_users", "audit_log")
 	eventStore := store.NewStore(testPool)
 	alertService := alert.NewService(eventStore)
 	require.NoError(t, alertService.ReloadRules(context.Background()))
 
+	// 登录已改为查库：先种 admin 账号再走真实登录接口
 	adminPasswordHash, hashErr := bcrypt.GenerateFromPassword([]byte(fixtureAdminPassword), bcrypt.MinCost)
 	require.NoError(t, hashErr)
+	require.NoError(t, eventStore.CreateAdminUser(context.Background(),
+		fixtureAdminUser, string(adminPasswordHash), "admin"))
 
 	apiRouter := NewRouter(eventStore, alertService, RouterConfig{
-		JWTSecret:         fixtureJWTSecret,
-		AdminUsername:     fixtureAdminUser,
-		AdminPasswordHash: string(adminPasswordHash),
+		JWTSecret: fixtureJWTSecret,
 	})
 	return &fixture{
 		engine:       apiRouter.Setup(),
 		eventStore:   eventStore,
 		alertService: alertService,
 	}
+}
+
+// createUserAndLogin 落一个指定角色的账号并换取其 JWT（角色矩阵测试用）。
+func (test *fixture) createUserAndLogin(t *testing.T, username string, password string, role string) string {
+	t.Helper()
+	passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	require.NoError(t, hashErr)
+	require.NoError(t, test.eventStore.CreateAdminUser(context.Background(), username, string(passwordHash), role))
+	recorder := test.do(http.MethodPost, "/api/v1/auth/login",
+		`{"username":"`+username+`","password":"`+password+`"}`, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var loginResponse struct {
+		Token string `json:"token"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &loginResponse))
+	return loginResponse.Token
 }
 
 // login 走真实登录接口换取 JWT，供受保护接口使用。

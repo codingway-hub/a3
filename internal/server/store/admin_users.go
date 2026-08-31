@@ -122,3 +122,61 @@ func (store *Store) SetAdminUserPassword(ctx context.Context, userID int64, pass
 	}
 	return nil
 }
+
+// GetAdminUserByID 按 ID 取完整行（含口令哈希列，仅审计快照前取用户名用）；不存在返回 ErrNotFound。
+func (store *Store) GetAdminUserByID(ctx context.Context, userID int64) (AdminUser, error) {
+	var userRow AdminUser
+	scanErr := store.pool.QueryRow(ctx,
+		`SELECT `+adminUserFullColumns+` FROM admin_users WHERE id = $1`, userID).
+		Scan(&userRow.ID, &userRow.Username, &userRow.PasswordHash, &userRow.Role,
+			&userRow.Enabled, &userRow.CreatedAt, &userRow.UpdatedAt)
+	if scanErr != nil {
+		return AdminUser{}, mapUserScanErr(scanErr)
+	}
+	return userRow, nil
+}
+
+// CreateAdminUserWithAudit 建号并同事务留痕（业务生效则留痕必在）；同名冲突 ErrAlreadyExists 无留痕。
+func (store *Store) CreateAdminUserWithAudit(ctx context.Context,
+	username string, passwordHash string, role string, operator string, afterState []byte) error {
+
+	return store.withTx(ctx, func(tx pgx.Tx) error {
+		if insertErr := tx.QueryRow(ctx,
+			`INSERT INTO admin_users (username, password_hash, role) VALUES ($1, $2, $3)
+			 RETURNING id`, username, passwordHash, role).Scan(new(int64)); insertErr != nil {
+			return mapUniqueViolation(insertErr)
+		}
+		return appendAuditInTx(ctx, tx, AuditActionUserCreate, AuditTargetUser, username, operator, nil, afterState)
+	})
+}
+
+// ResetAdminUserPasswordWithAudit 重置口令并同事务留痕（after 为 {username}）；
+// 不存在返回 ErrNotFound 无留痕。
+func (store *Store) ResetAdminUserPasswordWithAudit(ctx context.Context,
+	userID int64, passwordHash string, operator string) (AdminUser, error) {
+
+	var updatedRow AdminUser
+	withTxErr := store.withTx(ctx, func(tx pgx.Tx) error {
+		commandTag, execErr := tx.Exec(ctx,
+			`UPDATE admin_users SET password_hash = $2, updated_at = now() WHERE id = $1`,
+			userID, passwordHash)
+		if execErr != nil {
+			return execErr
+		}
+		if commandTag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		if scanErr := tx.QueryRow(ctx,
+			`SELECT `+adminUserColumns+` FROM admin_users WHERE id = $1`, userID).
+			Scan(&updatedRow.ID, &updatedRow.Username, &updatedRow.Role,
+				&updatedRow.Enabled, &updatedRow.CreatedAt, &updatedRow.UpdatedAt); scanErr != nil {
+			return scanErr
+		}
+		return appendAuditInTx(ctx, tx, AuditActionUserPasswordReset, AuditTargetUser, updatedRow.Username,
+			operator, nil, []byte(`{"username":"`+updatedRow.Username+`"}`))
+	})
+	if withTxErr != nil {
+		return AdminUser{}, withTxErr
+	}
+	return updatedRow, nil
+}

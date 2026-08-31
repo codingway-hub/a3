@@ -49,6 +49,12 @@ func main() {
 	}
 	defer closePool()
 
+	// 首次启动用 env 凭据种子 admin 账号（表空才种；之后账号增删改密走控制台）
+	if seedErr := seedAdminUser(ctx, eventStore, serverConfig, logger); seedErr != nil {
+		logger.Error("管理员账号种子失败", "error", seedErr)
+		os.Exit(1)
+	}
+
 	// 规则扫描服务：加载启用规则并后台消费
 	alertService := alert.NewService(eventStore)
 	if reloadErr := alertService.ReloadRules(ctx); reloadErr != nil {
@@ -70,15 +76,8 @@ func main() {
 	}
 
 	// HTTP 装配
-	adminPasswordHash, hashErr := bcrypt.GenerateFromPassword([]byte(serverConfig.AdminPassword), bcrypt.DefaultCost)
-	if hashErr != nil {
-		logger.Error("管理员口令哈希失败", "error", hashErr)
-		os.Exit(1)
-	}
 	router := api.NewRouter(eventStore, alertService, api.RouterConfig{
 		JWTSecret:         serverConfig.JWTSecret,
-		AdminUsername:     serverConfig.AdminUsername,
-		AdminPasswordHash: string(adminPasswordHash),
 		WebDist:           serverConfig.WebDist,
 		AgentDist:         serverConfig.AgentDist,
 		AllowAutoRegister: serverConfig.AllowAutoRegister,
@@ -151,6 +150,28 @@ func setupStore(ctx context.Context, databaseURL string, logger *slog.Logger) (*
 
 	logger.Info("数据库迁移与会话计数对账完成", "database", maskDatabaseURL(databaseURL))
 	return eventStore, pool.Close, nil
+}
+
+// seedAdminUser 首次启动（账号表为空）用 env 凭据种子 admin 账号；
+// 已有账号时跳过——此后口令改走控制台「用户管理」，env 改动不影响已建账号。
+func seedAdminUser(ctx context.Context, eventStore *store.Store, serverConfig *config.Config, logger *slog.Logger) error {
+	userCount, countErr := eventStore.CountAdminUsers(ctx)
+	if countErr != nil {
+		return countErr
+	}
+	if userCount > 0 {
+		logger.Info("控制台已存在账号，跳过 env 凭据种子", "accounts", userCount)
+		return nil
+	}
+	passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(serverConfig.AdminPassword), bcrypt.DefaultCost)
+	if hashErr != nil {
+		return hashErr
+	}
+	if createErr := eventStore.CreateAdminUser(ctx, serverConfig.AdminUsername, string(passwordHash), "admin"); createErr != nil {
+		return createErr
+	}
+	logger.Info("已用环境变量凭据种子首个管理员账号", "username", serverConfig.AdminUsername)
+	return nil
 }
 
 // buildServeCall 决定监听方式：证书与私钥齐备时走 HTTPS，否则明文 HTTP。

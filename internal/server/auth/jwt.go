@@ -27,21 +27,27 @@ type jwtHeader struct {
 	Typ string `json:"typ"`
 }
 
-// Claims 是控制台会话声明：登录用户名 + 过期时间戳（秒）。
+// Claims 是控制台会话声明：登录用户名 + 角色 + 过期时间戳（秒）。
+// Role 无 omitempty：旧格式 token 缺字段反序列化为空串，Verify 按非法拒绝（防提权）。
 type Claims struct {
-	Sub string `json:"sub"`
-	Exp int64  `json:"exp"`
+	Sub  string `json:"sub"`
+	Role string `json:"role"`
+	Exp  int64  `json:"exp"`
 }
 
+// 合法角色集合；与 admin_users.role 的 CHECK 约束（迁移 0010）同源。
+var validRoles = map[string]bool{"admin": true, "auditor": true}
+
 // SignJWT 以 HS256 签发控制台 Token，ttl 为有效期时长（一期约定 8h）。
-func SignJWT(secret string, username string, ttl time.Duration) (string, error) {
+func SignJWT(secret string, username string, role string, ttl time.Duration) (string, error) {
 	headerBytes, headerErr := json.Marshal(jwtHeader{Alg: "HS256", Typ: "JWT"})
 	if headerErr != nil {
 		return "", headerErr
 	}
 	claimsBytes, claimsErr := json.Marshal(Claims{
-		Sub: username,
-		Exp: time.Now().Add(ttl).Unix(),
+		Sub:  username,
+		Role: role,
+		Exp:  time.Now().Add(ttl).Unix(),
 	})
 	if claimsErr != nil {
 		return "", claimsErr
@@ -52,46 +58,47 @@ func SignJWT(secret string, username string, ttl time.Duration) (string, error) 
 	return signingInput + "." + base64RawURL.EncodeToString(signature), nil
 }
 
-// VerifyJWT 校验签名与有效期；成功返回声明中的用户名。
+// VerifyJWT 校验签名、有效期与角色合法性；成功返回声明中的用户名与角色。
 // 签名比对使用 hmac.Equal 恒时比较，防时序侧信道。
-func VerifyJWT(secret string, tokenString string) (string, error) {
+// 无 role 的旧格式 token 一律拒绝：空 role 若宽容为 admin 会构成提权面（8h TTL 影响可接受）。
+func VerifyJWT(secret string, tokenString string) (string, string, error) {
 	// base64url 字符集不含点，合法 Token 恰好三段
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
 	signingInput := parts[0] + "." + parts[1]
 
 	expectedSignature := hmacSHA256([]byte(secret), []byte(signingInput))
 	actualSignature, decodeErr := base64RawURL.DecodeString(parts[2])
 	if decodeErr != nil || !hmac.Equal(expectedSignature, actualSignature) {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
 
 	headerBytes, headerDecodeErr := base64RawURL.DecodeString(parts[0])
 	if headerDecodeErr != nil {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
 	var header jwtHeader
 	if headerErr := json.Unmarshal(headerBytes, &header); headerErr != nil || header.Alg != "HS256" {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
 
 	claimsBytes, claimsDecodeErr := base64RawURL.DecodeString(parts[1])
 	if claimsDecodeErr != nil {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
 	var claims Claims
 	if unmarshalErr := json.Unmarshal(claimsBytes, &claims); unmarshalErr != nil {
-		return "", ErrInvalidToken
+		return "", "", ErrInvalidToken
 	}
-	if claims.Sub == "" || claims.Exp <= 0 {
-		return "", ErrInvalidToken
+	if claims.Sub == "" || claims.Exp <= 0 || !validRoles[claims.Role] {
+		return "", "", ErrInvalidToken
 	}
 	if time.Now().Unix() > claims.Exp {
-		return "", ErrTokenExpired
+		return "", "", ErrTokenExpired
 	}
-	return claims.Sub, nil
+	return claims.Sub, claims.Role, nil
 }
 
 func hmacSHA256(key []byte, data []byte) []byte {

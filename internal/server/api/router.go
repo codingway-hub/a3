@@ -25,8 +25,6 @@ type Router struct {
 	alertService      *alert.Service
 	deviceAPI         *ingest.Handler // 设备侧接入（注册/上报）；nil 则不挂载
 	jwtSecret         string
-	adminUsername     string
-	adminPasswordHash string            // 启动时对 env 明文口令做一次 bcrypt 后缓存
 	webDist           string            // 前端静态目录；为空则不托管
 	agentDist         string            // 采集器发布产物目录；为空则不提供下载
 	allowAutoRegister bool              // setup-info 向指南页透出注册开关状态
@@ -37,8 +35,6 @@ type Router struct {
 // RouterConfig 是装配参数。
 type RouterConfig struct {
 	JWTSecret         string
-	AdminUsername     string
-	AdminPasswordHash string
 	WebDist           string
 	AgentDist         string
 	AllowAutoRegister bool
@@ -59,8 +55,6 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		alertService:      alertService,
 		deviceAPI:         routerConfig.DeviceAPI,
 		jwtSecret:         routerConfig.JWTSecret,
-		adminUsername:     routerConfig.AdminUsername,
-		adminPasswordHash: routerConfig.AdminPasswordHash,
 		webDist:           routerConfig.WebDist,
 		agentDist:         routerConfig.AgentDist,
 		allowAutoRegister: routerConfig.AllowAutoRegister,
