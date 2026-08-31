@@ -34,15 +34,17 @@
       </el-table-column>
       <el-table-column label="操作" width="110" align="center">
         <template #default="{ row }">
-          <el-button
-            v-if="row.status === 'active'"
-            type="danger"
-            link
-            @click="confirmRevoke(row)"
-          >
-            吊销
-          </el-button>
-          <el-button v-else type="primary" link @click="restoreDevice(row)">恢复</el-button>
+          <template v-if="authStore.isAdmin">
+            <el-button
+              v-if="row.status === 'active'"
+              type="danger"
+              link
+              @click="confirmRevoke(row)"
+            >
+              吊销
+            </el-button>
+            <el-button v-else type="primary" link @click="restoreDevice(row)">恢复</el-button>
+          </template>
         </template>
       </el-table-column>
     </el-table>
@@ -55,6 +57,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { fetchDevices, patchDeviceStatus } from '../api/console'
 import { formatDateTime } from '../utils/format'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const deviceRows = ref([])

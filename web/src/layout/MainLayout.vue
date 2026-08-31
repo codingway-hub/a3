@@ -10,29 +10,9 @@
         text-color="#a7b1c2"
         active-text-color="#ffffff"
       >
-        <el-menu-item index="/overview">
-          <el-icon><Odometer /></el-icon>
-          <span>概览</span>
-        </el-menu-item>
-        <el-menu-item index="/sessions">
-          <el-icon><Tickets /></el-icon>
-          <span>会话审计</span>
-        </el-menu-item>
-        <el-menu-item index="/alerts">
-          <el-icon><Bell /></el-icon>
-          <span>告警中心</span>
-        </el-menu-item>
-        <el-menu-item index="/devices">
-          <el-icon><Monitor /></el-icon>
-          <span>设备管理</span>
-        </el-menu-item>
-        <el-menu-item index="/rules">
-          <el-icon><Lock /></el-icon>
-          <span>规则管理</span>
-        </el-menu-item>
-        <el-menu-item index="/setup-guide">
-          <el-icon><Connection /></el-icon>
-          <span>接入指南</span>
+        <el-menu-item v-for="menuItem in visibleMenuItems" :key="menuItem.path" :index="menuItem.path">
+          <el-icon><component :is="menuItem.icon" /></el-icon>
+          <span>{{ menuItem.label }}</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -44,6 +24,9 @@
           <span class="user-chip">
             <el-icon><UserFilled /></el-icon>
             {{ authStore.username || '管理员' }}
+            <el-tag size="small" :type="authStore.isAdmin ? 'danger' : 'info'" effect="plain" class="role-tag">
+              {{ authStore.isAdmin ? '管理员' : '审计员' }}
+            </el-tag>
             <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
@@ -65,13 +48,30 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Bell, Connection, Lock, Monitor, Odometer, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 菜单按角色裁剪：auditor 只见只读 + 告警确认入口
+const menuItems = [
+  { path: '/overview', label: '概览', icon: Odometer, roles: null },
+  { path: '/sessions', label: '会话审计', icon: Tickets, roles: null },
+  { path: '/alerts', label: '告警中心', icon: Bell, roles: null },
+  { path: '/devices', label: '设备管理', icon: Monitor, roles: ['admin'] },
+  { path: '/rules', label: '规则管理', icon: Lock, roles: ['admin'] },
+  { path: '/users', label: '用户管理', icon: User, roles: ['admin'] },
+  { path: '/setup-guide', label: '接入指南', icon: Connection, roles: null },
+]
+
+const visibleMenuItems = computed(() =>
+  menuItems.filter((menuItem) => !menuItem.roles || menuItem.roles.includes(authStore.role)),
+)
 
 function handleCommand(command) {
   if (command === 'logout') {
@@ -119,6 +119,10 @@ function handleCommand(command) {
   gap: 4px;
   cursor: pointer;
   outline: none;
+}
+
+.role-tag {
+  margin-left: 2px;
 }
 
 .layout-main {

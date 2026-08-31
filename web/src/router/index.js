@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { TOKEN_STORAGE_KEY } from '../api/request'
 
 // 路由总表：/login 公开；其余一律经主布局承载并由守卫校验 JWT。
-// 业务页面（概览/会话/告警/设备）随 M3-3 起逐个挂入 MainLayout children。
+// meta.roles 为空 = 所有登录角色可用；指定则仅限对应角色（服务端 RequireRole 权威，前端仅省无效请求）。
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -53,13 +53,19 @@ const router = createRouter({
           path: 'devices',
           name: 'devices',
           component: () => import('../views/DevicesView.vue'),
-          meta: { title: '设备管理' },
+          meta: { title: '设备管理', roles: ['admin'] },
         },
         {
           path: 'rules',
           name: 'rules',
           component: () => import('../views/RulesView.vue'),
-          meta: { title: '规则管理' },
+          meta: { title: '规则管理', roles: ['admin'] },
+        },
+        {
+          path: 'users',
+          name: 'users',
+          component: () => import('../views/UsersView.vue'),
+          meta: { title: '用户管理', roles: ['admin'] },
         },
         {
           path: 'setup-guide',
@@ -77,6 +83,7 @@ const router = createRouter({
 })
 
 // 登录守卫：无 token 访问受保护页 → 跳登录并携带回跳地址；已登录访问登录页 → 回首页。
+// 角色守卫：meta.roles 指定且当前角色不在列 → 弹回概览（auditor 直达 admin URL 场景）。
 router.beforeEach((to) => {
   const hasToken = Boolean(localStorage.getItem(TOKEN_STORAGE_KEY))
   if (!to.meta.public && !hasToken) {
@@ -84,6 +91,10 @@ router.beforeEach((to) => {
   }
   if (to.path === '/login' && hasToken) {
     return { path: '/' }
+  }
+  const currentRole = localStorage.getItem('a3_console_role') || ''
+  if (to.meta.roles && !to.meta.roles.includes(currentRole)) {
+    return { path: '/overview' }
   }
   return true
 })

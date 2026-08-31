@@ -31,7 +31,7 @@
           @keyup.enter="applyFilters"
         />
       </el-form-item>
-      <el-form-item>
+      <el-form-item v-if="authStore.isAdmin">
         <el-button type="primary" :icon="'Plus'" @click="openCreateDialog">新增规则</el-button>
       </el-form-item>
     </el-form>
@@ -69,7 +69,11 @@
       </el-table-column>
       <el-table-column label="启用" width="90" align="center">
         <template #default="{ row }">
-          <el-switch :model-value="row.enabled" @change="(nextValue) => toggleEnabled(row, nextValue)" />
+          <el-switch
+            :model-value="row.enabled"
+            :disabled="!authStore.isAdmin"
+            @change="(nextValue) => toggleEnabled(row, nextValue)"
+          />
         </template>
       </el-table-column>
       <el-table-column label="更新时间" width="170">
@@ -78,7 +82,7 @@
       <el-table-column label="操作" width="160" align="center">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openHistoryDialog(row)">历史</el-button>
-          <template v-if="!row.builtin">
+          <template v-if="!row.builtin && authStore.isAdmin">
             <el-button link type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button link type="danger" size="small" @click="removeRule(row)">删除</el-button>
           </template>
@@ -196,6 +200,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { createRule, deleteRule, fetchAuditLog, fetchRules, patchRuleEnabled, updateRule } from '../api/console'
 import { formatDateTime, severityTagType } from '../utils/format'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
 
 // 与服务端 ruleIDPattern 同源的客户端预检
 const ruleIdPattern = /^[a-z0-9_.-]{3,64}$/

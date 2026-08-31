@@ -85,3 +85,25 @@ export function fetchAuditLog(query = {}) {
 export function fetchSetupInfo() {
   return apiClient.get('/setup-info')
 }
+
+// —— 用户管理（admin-only，服务端 RequireRole 权威） ——
+
+// fetchUsers 账号列表（不含口令哈希）
+export function fetchUsers() {
+  return apiClient.get('/users')
+}
+
+// createUser 新建账号；body：{username,password,role}，重名 409
+export function createUser(userBody) {
+  return apiClient.post('/users', userBody)
+}
+
+// patchUser 停用/启用或改角色；body：{enabled?} 或 {role?}；目标为当前登录账号时服务端 400
+export function patchUser(userId, userBody) {
+  return apiClient.patch(`/users/${encodeURIComponent(userId)}`, userBody)
+}
+
+// resetUserPassword 管理员重置口令；body：{password}
+export function resetUserPassword(userId, password) {
+  return apiClient.patch(`/users/${encodeURIComponent(userId)}/password`, { password })
+}
