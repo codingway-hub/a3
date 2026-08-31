@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// 控制台敏感操作审计：action 与 target_type 的合法取值（与迁移 0008 的 CHECK 约束同源）。
+// 控制台敏感操作审计：action 与 target_type 的合法取值（与迁移 0008/0010 的 CHECK 约束同源）。
 const (
 	AuditActionRuleCreate    = "rule_create"
 	AuditActionRuleUpdate    = "rule_update"
@@ -17,9 +17,14 @@ const (
 	AuditActionRuleDelete    = "rule_delete"
 	AuditActionDeviceRevoke  = "device_revoke"
 	AuditActionDeviceRestore = "device_restore"
+	AuditActionUserCreate    = "user_create"
+	AuditActionUserUpdate    = "user_update"
+
+	AuditActionUserPasswordReset = "user_password_reset"
 
 	auditTargetRule   = "rule"
 	auditTargetDevice = "device"
+	auditTargetUser   = "user"
 )
 
 // AuditEntry 对应 audit_log 表一行；Before/After 为变更前后 JSONB 快照原文。

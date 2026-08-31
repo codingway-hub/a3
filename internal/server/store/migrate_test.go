@@ -26,8 +26,9 @@ func countEmbeddedUpMigrations(t *testing.T) int {
 // defaultTestDatabaseURL 本地开发库默认连接串，与 deploy/dev/docker-compose.dev.yml 对齐。
 const defaultTestDatabaseURL = "postgres://a3:a3@127.0.0.1:5433/a3_test?sslmode=disable"
 
-// expectedTableNames 迁移完成后 public schema 应存在的全部表（六张业务表 + 迁移记录表）。
+// expectedTableNames 迁移完成后 public schema 应存在的全部表（业务表 + 迁移记录表）。
 var expectedTableNames = []string{
+	"admin_users",
 	"alerts",
 	"audit_log",
 	"devices",
@@ -236,7 +237,7 @@ func newIntegrationTestConnection(t *testing.T) *pgx.Conn {
 func resetDatabaseSchema(t *testing.T, testConn *pgx.Conn) {
 	t.Helper()
 	_, dropErr := testConn.Exec(context.Background(),
-		`DROP TABLE IF EXISTS rules, alerts, audit_log, events, sessions, devices, schema_migrations CASCADE`)
+		`DROP TABLE IF EXISTS admin_users, rules, alerts, audit_log, events, sessions, devices, schema_migrations CASCADE`)
 	if dropErr != nil {
 		t.Fatalf("重置数据库 Schema 失败: %v", dropErr)
 	}
