@@ -1,0 +1,49 @@
+cmd/server/main.go
+  s_8301e3490dd7cb::t_2bf8748fb5b854 52-57
+  s_8301e3490dd7cb::t_7391edb1958d8c 155-174
+  s_8301e3490dd7cb::t_a3e93780dcf110 175-176
+internal/server/api/console_test.go
+  s_8301e3490dd7cb::t_aa961894263218 45,50,53-54,57,66-79
+  s_8301e3490dd7cb::t_8b2beb63d4c2f0 80-81
+internal/server/api/console_auth.go
+  s_8301e3490dd7cb::t_9410deb6e86eca 4
+  s_8301e3490dd7cb::t_74c39534d9ed86 12,23-27,38-53,58,66-67,71,74-75,79
+internal/server/auth/middleware_test.go
+  s_8301e3490dd7cb::t_d5f03826796321 185-191
+  s_8301e3490dd7cb::t_ca82cd55389df0 64,71,78
+  s_8301e3490dd7cb::t_851dc93d72df6c 157-184
+  s_8301e3490dd7cb::t_ebb7ff2ac19bf7 192
+internal/server/store/audit.go
+  s_8301e3490dd7cb::t_08a0cc553044fc 27-29
+internal/server/auth/jwt_test.go
+  s_8301e3490dd7cb::t_aad7b8b39bcb0e 76-109
+  s_8301e3490dd7cb::t_349463f64032b6 18,27,37,51,64,75
+  s_8301e3490dd7cb::t_d6bfcd58c0a6fd 15,24,33,42
+internal/server/auth/middleware.go
+  s_8301e3490dd7cb::t_d3b30fb9d65fd6 11,15
+  s_8301e3490dd7cb::t_6e5c61168b26f5 43,51,57-74
+  s_8301e3490dd7cb::t_9396af5cc7ff26 99-106
+  s_8301e3490dd7cb::t_93835b73f28cbe 107-108
+internal/server/store/admin_users.go
+  s_8301e3490dd7cb::t_ae881fe8452ef6 125-148,150-174,176-182
+  s_8301e3490dd7cb::t_9be422bd5d80d4 149
+  s_8301e3490dd7cb::t_afcd3df47d17f9 175
+internal/server/auth/jwt.go
+  s_8301e3490dd7cb::t_d59dba71dc9b3c 30-31,33-35,38-40,42,48-50,61,63-64,68,75,80,84,89,93,95-96,99,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "08a38921bbd667db9ca5dd16fd3abd926c1e0a99",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "glm-5.3-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
