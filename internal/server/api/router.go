@@ -82,7 +82,7 @@ func (api *Router) Setup() *gin.Engine {
 	engine.GET("/install.sh", api.HandleInstallScript)
 	engine.GET("/download/agent/:assetName", api.HandleAgentDownload)
 
-	// 控制台 API：login 公开，其余统一 JWT 保护
+	// 控制台 API：login 公开，其余统一 JWT 保护；写操作按角色二次收敛
 	consoleGroup := engine.Group("/api/v1")
 	consoleGroup.POST("/auth/login", api.HandleLogin)
 	consoleGroup.GET("/setup-info", api.HandleSetupInfo)
@@ -94,16 +94,26 @@ func (api *Router) Setup() *gin.Engine {
 		protectedGroup.GET("/sessions/:deviceId/:sessionKey/events", api.HandleSessionEvents)
 		protectedGroup.GET("/sessions/:deviceId/:sessionKey/export", api.HandleSessionExport)
 		protectedGroup.GET("/alerts", api.HandleListAlerts)
+		// 告警确认是审计员日常工作：admin 与 auditor 均可
 		protectedGroup.PATCH("/alerts/:alertID", api.HandleAcknowledgeAlert)
 		protectedGroup.GET("/alerts/export", api.HandleAlertsExport)
 		protectedGroup.GET("/devices", api.HandleListDevices)
-		protectedGroup.PATCH("/devices/:deviceID", api.HandlePatchDeviceStatus)
 		protectedGroup.GET("/rules", api.HandleListRules)
-		protectedGroup.POST("/rules", api.HandleCreateRule)
-		protectedGroup.PUT("/rules/:ruleID", api.HandleUpdateRule)
-		protectedGroup.DELETE("/rules/:ruleID", api.HandleDeleteRule)
-		protectedGroup.PATCH("/rules/:ruleID", api.HandlePatchRule)
 		protectedGroup.GET("/audit-log", api.HandleListAuditLog)
+
+		// 危险写操作 admin-only：规则变更、设备吊销/恢复、用户管理
+		adminOnlyGroup := protectedGroup.Group("", auth.RequireRole("admin"))
+		{
+			adminOnlyGroup.POST("/rules", api.HandleCreateRule)
+			adminOnlyGroup.PUT("/rules/:ruleID", api.HandleUpdateRule)
+			adminOnlyGroup.DELETE("/rules/:ruleID", api.HandleDeleteRule)
+			adminOnlyGroup.PATCH("/rules/:ruleID", api.HandlePatchRule)
+			adminOnlyGroup.PATCH("/devices/:deviceID", api.HandlePatchDeviceStatus)
+			adminOnlyGroup.GET("/users", api.HandleListUsers)
+			adminOnlyGroup.POST("/users", api.HandleCreateUser)
+			adminOnlyGroup.PATCH("/users/:userID", api.HandlePatchUser)
+			adminOnlyGroup.PATCH("/users/:userID/password", api.HandleResetUserPassword)
+		}
 	}
 
 	// 前端静态托管：NoRoute 时优先回退 index.html（SPA history 路由）
