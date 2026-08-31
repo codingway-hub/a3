@@ -109,7 +109,7 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 | --- | --- | --- |
 | `A3_ADDR` | 监听地址：默认仅绑本机回环，避免明文意外暴露到局域网 | `127.0.0.1:8080` |
 | `A3_DATABASE_URL` | PostgreSQL 连接串 | `postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable` |
-| `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子管理员；口令留空则随机生成并打印日志 | `admin` / 空(随机) |
+| `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子凭据：仅数据库无账号时创建首个 admin（首启）；已有账号即跳过，改密走控制台用户管理 | `admin` / 空(随机) |
 | `A3_JWT_SECRET` | 登录态签名密钥；留空则每次重启随机生成(需重新登录) | 空(随机) |
 | `A3_ALLOW_AUTO_REGISTER` | 是否开放终端自助注册（一键安装自动开启；收齐设备后建议改回关闭） | `false` |
 | `A3_NOTIFY_WEBHOOK_URL` | 告警外送 webhook 地址；空则禁用外送（告警仅落控制台） | 空 |
