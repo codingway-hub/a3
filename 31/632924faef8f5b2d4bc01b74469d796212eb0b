@@ -1,0 +1,33 @@
+migrations/0010_admin_users.up.sql
+  s_8301e3490dd7cb::t_f12a6dea3de60c 1-25
+internal/server/store/migrate_test.go
+  s_8301e3490dd7cb::t_3fdd5f01c2c60c 29,31
+  s_8301e3490dd7cb::t_fd5f6a065db0d7 240
+internal/server/store/audit.go
+  s_8301e3490dd7cb::t_1e7c602542214f 12,20-23,27
+internal/server/store/admin_users_test.go
+  s_8301e3490dd7cb::t_4e549c601bff8c 1-108
+internal/server/store/admin_users.go
+  s_8301e3490dd7cb::t_c69ed43977828d 1-4,6,9-44,53-60,62-106,108-124
+  s_8301e3490dd7cb::t_73102431358562 45-52
+  s_8301e3490dd7cb::t_bcd60578b64304 5,7-8
+  s_8301e3490dd7cb::t_014a2728c61a49 61,107
+migrations/0010_admin_users.down.sql
+  s_8301e3490dd7cb::t_481804db1c6966 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "31632924faef8f5b2d4bc01b74469d796212eb0b",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
