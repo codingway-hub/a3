@@ -33,7 +33,9 @@ services:
       A3_DATABASE_URL: postgres://a3:${A3_POSTGRES_PASSWORD:-a3-change-me}@postgres:5432/a3?sslmode=disable
       A3_ADMIN_USER: ${A3_ADMIN_USER:-admin}
       A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}
-      # 留空则每次重启随机生成，控制台需重新登录；生产建议显式设置
+      # 服务端持久状态目录：A3_JWT_SECRET 留空时在此持久化登录密钥（server-state 卷，重启不丢会话）
+      A3_SERVER_STATE_DIR: /app/state
+      # 留空则自动生成并持久化到 A3_SERVER_STATE_DIR 的 jwt-secret（0600）；生产建议显式设置
       A3_JWT_SECRET: ${A3_JWT_SECRET:-}
       # 对外公开地址（install-server.sh 写入；反代场景配置即权威，用于 install.sh 注入）
       A3_PUBLIC_URL: ${A3_PUBLIC_URL:-}
@@ -47,6 +49,9 @@ services:
       # 主机端口默认仅绑回环，避免控制台/上报明文暴露到局域网；
       # install-server.sh 检测到非回环公开地址时会设 A3_HTTP_BIND=0.0.0.0。
       - "${A3_HTTP_BIND:-127.0.0.1}:${A3_HTTP_PORT:-8080}:8080"
+    volumes:
+      # JWT 密钥等持久状态跨容器重启保留（.env 未填 A3_JWT_SECRET 时登录态不掉）
+      - server-state:/app/state
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
       interval: 10s
@@ -56,6 +61,7 @@ services:
 
 volumes:
   pgdata:
+  server-state:
 
 # ---- 一期预留：ClickHouse（海量事件分析加速，二期启用） ----
 # clickhouse:

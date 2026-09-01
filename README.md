@@ -109,8 +109,9 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 | --- | --- | --- |
 | `A3_ADDR` | 监听地址：默认仅绑本机回环，避免明文意外暴露到局域网 | `127.0.0.1:8080` |
 | `A3_DATABASE_URL` | PostgreSQL 连接串 | `postgres://a3:a3@127.0.0.1:5432/a3?sslmode=disable` |
-| `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子凭据：仅数据库无账号时创建首个 admin（首启）；已有账号即跳过，改密走控制台用户管理 | `admin` / 空(随机) |
-| `A3_JWT_SECRET` | 登录态签名密钥；留空则每次重启随机生成(需重新登录) | 空(随机) |
+| `A3_ADMIN_USER` / `A3_ADMIN_PASSWORD` | 种子凭据：仅数据库无账号时创建首个 admin（首启）；账号表为空且口令为空时**拒绝启动**，必须显式给出；已有账号即跳过，改密走控制台用户管理 | `admin` / 空(首启必填) |
+| `A3_SERVER_STATE_DIR` | 服务端持久状态目录（登录密钥等重启不掉的凭据；目录 0700、密钥文件 0600）；容器部署固定 `/app/state` | `~/.a3-server` |
+| `A3_JWT_SECRET` | 登录态签名密钥；留空则自动生成并持久化到服务端状态目录（重启后登录态保持）；显式设置时优先且不写文件 | 空(自动生成+持久化) |
 | `A3_NOTIFY_WEBHOOK_URL` | 告警外送 webhook 地址；空则禁用外送（告警仅落控制台） | 空 |
 | `A3_NOTIFY_WEBHOOK_FORMAT` | webhook 信封格式：`generic`(兼容 Slack)、`wecom`、`dingtalk`、`feishu` | `generic` |
 | `A3_NOTIFY_MIN_SEVERITY` | 外送最低严重级别：`low`(全部)、`medium`、`high` | `low` |

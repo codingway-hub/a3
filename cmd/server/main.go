@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -32,11 +33,8 @@ func main() {
 		os.Exit(1)
 	}
 	if serverConfig.JWTSecretGenerated {
-		logger.Warn("A3_JWT_SECRET 未设置，已随机生成临时密钥（重启后控制台会话全部失效）；生产环境请显式配置")
-	}
-	if serverConfig.AdminPasswordGenerated {
-		logger.Warn("A3_ADMIN_PASSWORD 未设置，本次启动随机生成管理员口令",
-			"username", serverConfig.AdminUsername, "password", serverConfig.AdminPassword)
+		logger.Warn("A3_JWT_SECRET 未显式配置，已自动生成登录密钥并持久化（目录 0700/文件 0600），重启后控制台会话保持",
+			"path", serverConfig.JWTSecretPath)
 	}
 
 	ctx := context.Background()
@@ -161,6 +159,9 @@ func seedAdminUser(ctx context.Context, eventStore *store.Store, serverConfig *c
 	if userCount > 0 {
 		logger.Info("控制台已存在账号，跳过 env 凭据种子", "accounts", userCount)
 		return nil
+	}
+	if serverConfig.AdminPassword == "" {
+		return fmt.Errorf("admin_users 表为空且 A3_ADMIN_PASSWORD 未设置：首次启动必须显式给出口令，拒绝空口令种子")
 	}
 	passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(serverConfig.AdminPassword), bcrypt.DefaultCost)
 	if hashErr != nil {

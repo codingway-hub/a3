@@ -28,11 +28,13 @@ RUN for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/am
 FROM alpine:3.20
 # 出站 HTTPS 上报链路依赖系统 CA；自签名单机部署可在采集器侧显式跳过校验
 RUN apk add --no-cache ca-certificates \
-  && adduser -D -H -s /sbin/nologin a3
+  && adduser -D -H -s /sbin/nologin a3 \
+  # 服务端持久状态目录（JWT 密钥自动持久化；容器用户无 home，必须显式指定并由 compose 挂卷兜底）
+  && mkdir -p /app/state && chown a3:a3 /app/state
 COPY --from=server-builder /out/a3-server /usr/local/bin/a3-server
 COPY --from=web-builder /build/web/dist /app/web/dist
 COPY --from=server-builder /out/agent /app/agent
-ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist A3_AGENT_DIST=/app/agent
+ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist A3_AGENT_DIST=/app/agent A3_SERVER_STATE_DIR=/app/state
 EXPOSE 8080
 USER a3
 ENTRYPOINT ["a3-server"]
