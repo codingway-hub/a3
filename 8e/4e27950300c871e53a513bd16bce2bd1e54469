@@ -1,0 +1,145 @@
+deploy/install-server.sh
+  s_8301e3490dd7cb::t_c0ce1248deb493 126-127
+  s_8301e3490dd7cb::t_03a140f418318d 4-5
+  s_8301e3490dd7cb::t_163114f4d03cb1 105-106
+web/src/router/index.js
+  s_8301e3490dd7cb::t_31f6807b98b1ac 71-75
+  s_8301e3490dd7cb::t_5b2e2f8be65111 70
+internal/server/api/install_routes_test.go
+  s_8301e3490dd7cb::t_19371927d4990b 125
+internal/server/ingest/handler.go
+  s_8301e3490dd7cb::t_b65a1f5920e93c 6,14-23,26-27,32-35,39,50-52,54-66,69-74,77,79,83-90,92,140
+cmd/agent/register.go
+  s_8301e3490dd7cb::t_800400346b55b7 101-103,105-110,112,114-116,126-127,132
+  s_8301e3490dd7cb::t_67718d3014aab3 164-168,170-182,184-201
+  s_8301e3490dd7cb::t_efc34ad31c3321 67-68,88-99,104,111,113,117,119,138-140,146,150,153-154,156
+  s_8301e3490dd7cb::t_77b72cd53baa86 162-163,169,183
+internal/server/ingest/handler_test.go
+  s_8301e3490dd7cb::t_a1e91db86dbd66 23-24,28-29,35-40,44
+  s_8301e3490dd7cb::t_e7e9ef2adb3e30 127
+  s_8301e3490dd7cb::t_9541496f3c13a1 150
+  s_8301e3490dd7cb::t_9ae4d18587d89a 41
+  s_8301e3490dd7cb::t_d1d30ab315fe05 59,61,63
+internal/server/api/console_test.go
+  s_8301e3490dd7cb::t_753e19459aff3e 45-46
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_8fbb8cc546e6c7 24-31,36-40,52-59
+  s_8301e3490dd7cb::t_f8c01106ea9f33 101,109-113
+internal/server/store/devices.go
+  s_8301e3490dd7cb::t_d004e56bc5e1a8 59,63-65,70-73,113,115,131-155
+  s_8301e3490dd7cb::t_76580b9ffd00ff 156-157
+internal/server/ingest/service.go
+  s_8301e3490dd7cb::t_55378f30bc36a0 13,30-34,37-40,46-55,64-66
+  s_8301e3490dd7cb::t_448be6d5d8ec22 95-96,99-120,122-123,144,148-198
+migrations/0011_install_credentials.down.sql
+  s_8301e3490dd7cb::t_ac42c679511f92 1-13
+internal/server/api/console_credentials.go
+  s_8301e3490dd7cb::t_430d6f05c1d4a7 1-197
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_f6583dca23a783 149-151
+  s_8301e3490dd7cb::t_b27d6a1bd2ccd8 27,33-35
+internal/server/store/audit.go
+  s_8301e3490dd7cb::t_42779e96d0d5d3 14-21,25-33,39-41
+internal/server/api/console_credentials_test.go
+  s_8301e3490dd7cb::t_56889743a405e6 135-136
+  s_8301e3490dd7cb::t_cfd51d7daca7e1 185-186,189,199
+  s_8301e3490dd7cb::t_faa0ca908c4730 83-86
+  s_8301e3490dd7cb::t_98bd1b76826408 1-82,87-134,137-153,157-184,187-188,190-198
+  s_8301e3490dd7cb::t_5a6ae6cb3c044f 156
+  s_8301e3490dd7cb::t_201075908a5e18 154-155
+docs/INSTALL.md
+  s_8301e3490dd7cb::t_35552e37fa454b 29,31,33-37
+  s_8301e3490dd7cb::t_9592ae74b91e37 64
+  s_8301e3490dd7cb::t_aefeb942add02e 82,84
+  s_8301e3490dd7cb::t_0f5c058df6e57a 54
+internal/server/store/install_credentials_test.go
+  s_8301e3490dd7cb::t_c5379844c171ab 121
+  s_8301e3490dd7cb::t_716010476370b7 45-46
+  s_8301e3490dd7cb::t_3db061854a2a59 37,42,108,116,120,122,124,163
+  s_8301e3490dd7cb::t_19bd9fd80a2499 1-4,8-15,33,38,40-41,43-44,47-55,57,59-65,67,69-80,82-99,102-107,109-115,117-119,123,125-131,137-139,141,143,145-147,150-152,167-172,175-179,181-190,193-218
+  s_8301e3490dd7cb::t_a003f31f04863f 81
+  s_8301e3490dd7cb::t_170af9661751b9 5-7,16-30,34,36
+  s_8301e3490dd7cb::t_b4c91a63659e5c 31-32,35,39
+  s_8301e3490dd7cb::t_40f1bdd32c8a04 56,66
+  s_8301e3490dd7cb::t_06e88577c0b6e4 58,68,101,134,136,142,144,149,174,192
+  s_8301e3490dd7cb::t_d0f6e8cdb7b0ff 100
+  s_8301e3490dd7cb::t_e868afa12a38a3 191
+  s_8301e3490dd7cb::t_69f676ec1f8532 132-133,135,140,148,153-162,164-166
+  s_8301e3490dd7cb::t_7be82db1688d3c 173,180
+cmd/agent/register_test.go
+  s_8301e3490dd7cb::t_67e3cea374d012 88
+  s_8301e3490dd7cb::t_dd0974c387a423 1-54,56-87
+  s_8301e3490dd7cb::t_3cf5ffd8dda35f 55
+deploy/.env.example
+  s_8301e3490dd7cb::t_5edf832c88abc8 30-31
+web/src/api/console.js
+  s_8301e3490dd7cb::t_4b7efeb1d8b380 84
+  s_8301e3490dd7cb::t_4c67547cbd72d1 110-132
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_9f112508785429 186
+  s_8301e3490dd7cb::t_99d31e0c25730f 195-196
+  s_8301e3490dd7cb::t_a07e7556ea256d 174
+web/src/views/SetupGuideView.vue
+  s_8301e3490dd7cb::t_1ab6638fa04f72 41
+  s_8301e3490dd7cb::t_09da15864b88f5 21,24-25
+internal/server/auth/device.go
+  s_8301e3490dd7cb::t_ac4854659997f4 26-38
+internal/server/store/migrate_test.go
+  s_8301e3490dd7cb::t_e64aecb716aa16 37
+  s_8301e3490dd7cb::t_b81d5c7e5cba7d 36
+  s_8301e3490dd7cb::t_ee6791cf90e68d 242-243
+internal/server/ingest/ratelimit.go
+  s_8301e3490dd7cb::t_1d02640aff6b2e 1-53
+internal/server/config/config_test.go
+  s_8301e3490dd7cb::t_ec2d09c71311fe 14
+  s_8301e3490dd7cb::t_90ca79c3327c76 21
+internal/server/ingest/service_test.go
+  s_8301e3490dd7cb::t_d297095b5a8993 191-199
+  s_8301e3490dd7cb::t_f611e931e5c4d4 275-276
+  s_8301e3490dd7cb::t_0ecf0b9aa23f4c 6,20-32,35-36,38-40,44,48-49,51,67-68,73,77,80,86,89,92,95,97-100,102-103,108,113,117,120,123,135-137,140,143,146-190,200-243,245-247,250-274,277-292,296,298,337,339,373
+  s_8301e3490dd7cb::t_8db3083e9e93d5 244
+  s_8301e3490dd7cb::t_5393b73aa97d67 248-249
+cmd/server/main.go
+  s_8301e3490dd7cb::t_3acc8ad37501bd 80-84
+  s_8301e3490dd7cb::t_00ed2bfc66da12 98
+internal/server/api/install_routes.go
+  s_8301e3490dd7cb::t_bc53b0326aa73d 53,56-57
+internal/server/store/install_credentials.go
+  s_8301e3490dd7cb::t_1f765d08cdeefd 1-17,20,24-120,126,132,134-139,142-154,158-161,164-165,167,169-170,186-189,191-192,208-209,211-217,220-223,231-232,235-239,244-259
+  s_8301e3490dd7cb::t_49589c59683fd4 18-19,21-23,121-125,127-130,133,141,162-163,166,168,171-185,190,193-198,210
+  s_8301e3490dd7cb::t_04813a6da6deb2 199-207
+  s_8301e3490dd7cb::t_41aefef44f8636 224-225,227-228,234,242-243
+  s_8301e3490dd7cb::t_6fa132684f8216 218-219,226,229-230,233,240-241
+  s_8301e3490dd7cb::t_1a81dc0ded798b 131,140,155-157
+internal/server/store/devices_test.go
+  s_8301e3490dd7cb::t_f55aa0201a4433 6-7
+  s_8301e3490dd7cb::t_74c50ac404b686 88-190
+web/src/layout/MainLayout.vue
+  s_8301e3490dd7cb::t_65dffdae55525f 69
+  s_8301e3490dd7cb::t_75430076e82036 53
+migrations/0011_install_credentials.up.sql
+  s_8301e3490dd7cb::t_bd5fe06c11a292 1-41
+web/src/views/CredentialsView.vue
+  s_8301e3490dd7cb::t_8128abb203ffe7 1-327
+README.md
+  s_8301e3490dd7cb::t_9e0c48c6354940 19
+  s_8301e3490dd7cb::t_3334c6a4b70024 97-98
+  s_8301e3490dd7cb::t_49ef1cf7b87dd5 123-131
+  s_8301e3490dd7cb::t_d71712b54ed9f0 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8e4e27950300c871e53a513bd16bce2bd1e54469",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
