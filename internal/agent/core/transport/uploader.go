@@ -145,6 +145,51 @@ func (uploader *Uploader) GetDeviceRules(ctx context.Context) (schema.DeviceRule
 	}
 }
 
+// Heartbeat 上报一次常驻心跳：携带终端本地待送达积压（spool 计批次数与字节数），
+// 服务端据此刷新设备在线态并判「数据滞留」。单次尝试、不内部退避——调用方是周期
+// 心跳循环，失败等下一轮或按自身节奏退避即可；瞬时可重试（网络/5xx/429）返回普通
+// 错误，鉴权失效（401/403，设备已吊销或 Token 轮换）归类 NonRetryableError，由调用方
+// 决定是否停止该设备的心跳（已吊销设备不应再刷新成「在线」）。
+func (uploader *Uploader) Heartbeat(ctx context.Context, spoolPendingBatches int64, spoolPendingBytes int64) error {
+	heartbeatBody, marshalErr := json.Marshal(struct {
+		SpoolPendingBatches int64 `json:"spool_pending_batches"`
+		SpoolPendingBytes   int64 `json:"spool_pending_bytes"`
+	}{
+		SpoolPendingBatches: spoolPendingBatches,
+		SpoolPendingBytes:   spoolPendingBytes,
+	})
+	if marshalErr != nil {
+		return fmt.Errorf("序列化心跳请求失败: %w", marshalErr)
+	}
+
+	heartbeatRequest, buildErr := http.NewRequestWithContext(ctx, http.MethodPost,
+		uploader.serverBaseURL+"/api/v1/agent/heartbeat", bytes.NewReader(heartbeatBody))
+	if buildErr != nil {
+		return fmt.Errorf("构建心跳请求失败: %w", buildErr)
+	}
+	heartbeatRequest.Header.Set("Content-Type", "application/json")
+	heartbeatRequest.Header.Set("Authorization", "Bearer "+uploader.deviceToken)
+
+	response, doErr := uploader.httpClient.Do(heartbeatRequest)
+	if doErr != nil {
+		return fmt.Errorf("心跳请求发送失败: %w", doErr)
+	}
+	defer func() { _ = response.Body.Close() }()
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	if readErr != nil {
+		return fmt.Errorf("读取心跳响应失败: %w", readErr)
+	}
+	switch {
+	case response.StatusCode == http.StatusOK:
+		return nil
+	case response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500:
+		return fmt.Errorf("服务端暂时不可用(状态码 %d): %s", response.StatusCode, string(responseBytes))
+	default:
+		// 其余 4xx（401/403 为主）：鉴权失效，重试无意义，交调用方决策
+		return &NonRetryableError{StatusCode: response.StatusCode, Detail: string(responseBytes)}
+	}
+}
+
 // RegisterDevice 注册设备并换取一次性下发的设备 Token。
 // deviceInfo.InstallCode 是管理员下发的一次性安装凭据（注册门禁，必需）；
 // credentialToken 为既有设备 Token（可选）：同指纹命中既有 active 设备时作为

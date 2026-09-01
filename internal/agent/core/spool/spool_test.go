@@ -319,3 +319,38 @@ func TestStaleTempProtectsConcurrentProducer(t *testing.T) {
 	assert.True(t, os.IsNotExist(staleStatErr), "超过 1 小时的崩溃残留临时文件应在启动时清理")
 	_ = restartedQueue
 }
+
+// TestStatusCountsIncomingAndWorking 积压状态口径：incoming 排队 + working 在途
+// 租约合计计数与字节数；隔离文件与临时半成品不纳入批次计数。
+func TestStatusCountsIncomingAndWorking(t *testing.T) {
+	spoolQueue, newErr := New(filepath.Join(t.TempDir(), "spool"), 0)
+	require.NoError(t, newErr)
+
+	batches, bytes, statusErr := spoolQueue.Status()
+	require.NoError(t, statusErr)
+	assert.Equal(t, int64(0), batches)
+	assert.Equal(t, int64(0), bytes)
+
+	payloadA := []byte(`{"events":["a"]}`)
+	payloadB := []byte(`{"events":["b"]}`)
+	require.NoError(t, spoolQueue.Enqueue(payloadA))
+	require.NoError(t, spoolQueue.Enqueue(payloadB))
+
+	batches, bytes, statusErr = spoolQueue.Status()
+	require.NoError(t, statusErr)
+	assert.Equal(t, int64(2), batches)
+	assert.Equal(t, int64(int64(len(payloadA))+int64(len(payloadB))), bytes)
+
+	// 取出一个作为在途租约：租约仍在积压口径内（尚未确认送达）
+	inflightBatch, dequeueErr := spoolQueue.Dequeue()
+	require.NoError(t, dequeueErr)
+	batches, _, statusErr = spoolQueue.Status()
+	require.NoError(t, statusErr)
+	assert.Equal(t, int64(2), batches, "在途租约计入积压（未送达即未脱困）")
+
+	// 归档不在积压口径：确认后剩余清零（在途 + 队内各一）
+	require.NoError(t, inflightBatch.Commit())
+	batches, _, statusErr = spoolQueue.Status()
+	require.NoError(t, statusErr)
+	assert.Equal(t, int64(1), batches, "确认送达后从积压中扣除")
+}

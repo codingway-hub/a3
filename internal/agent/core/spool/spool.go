@@ -234,6 +234,36 @@ func (spoolQueue *Spool) Len() (int, error) {
 	return len(batchNames), nil
 }
 
+// Status 返回待送达服务端的积压量：incoming 排队批与 working 在途租约的
+// 批次数与字节数合计。「待送达」口径——在途批次尚未确认送达服务端，仍算未脱困；
+// 隔离区属终局归档，不计入积压。结果供常驻心跳上报服务端，其在线窗口 + 非零积压
+// 联合判定设备「数据滞留(abnormal)」。临时半成品与隔离文件不重复计数。
+func (spoolQueue *Spool) Status() (pendingBatches int64, pendingBytes int64, err error) {
+	for directoryIndex, directory := range []string{spoolQueue.incomingPath, spoolQueue.workingPath} {
+		dirEntries, readErr := os.ReadDir(directory)
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				continue
+			}
+			return 0, 0, fmt.Errorf("读取 spool 目录失败: %w", readErr)
+		}
+		for _, dirEntry := range dirEntries {
+			if dirEntry.IsDir() {
+				continue
+			}
+			// incoming 除常规批次外还有临时半成品，只计批次（working 下必为在途租约）
+			if directoryIndex == 0 && !isPlainBatchName(dirEntry.Name()) {
+				continue
+			}
+			pendingBatches++
+			if fileStat, statErr := dirEntry.Info(); statErr == nil {
+				pendingBytes += fileStat.Size()
+			}
+		}
+	}
+	return pendingBatches, pendingBytes, nil
+}
+
 // listIncoming 返回 incoming 下按文件名字典序（即时间序）排列的批次文件名列表。
 func (spoolQueue *Spool) listIncoming() ([]string, error) {
 	dirEntries, readErr := os.ReadDir(spoolQueue.incomingPath)

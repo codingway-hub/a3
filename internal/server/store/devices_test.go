@@ -68,6 +68,29 @@ func TestTouchDeviceRefreshesHeartbeat(t *testing.T) {
 	assert.ErrorIs(t, touchErr, ErrNotFound)
 }
 
+func TestTouchDeviceHeartbeatRefreshesSeenAndSpoolBacklog(t *testing.T) {
+	testPool := newTestPool(t)
+	resetTablesForTest(t, testPool, "devices")
+	deviceStore := NewStore(testPool)
+	ctx := context.Background()
+
+	newDevice := &Device{DeviceID: "dev-heartbeat-001", TokenHash: "hash-heartbeat-001", Hostname: "host-hb"}
+	require.NoError(t, deviceStore.CreateDevice(ctx, newDevice))
+	originalLastSeen := newDevice.LastSeenAt
+
+	time.Sleep(20 * time.Millisecond) // 保证时间戳可观测地推进
+	require.NoError(t, deviceStore.TouchDeviceHeartbeat(ctx, "dev-heartbeat-001", 7, 4096))
+
+	beaten, fetchErr := deviceStore.GetDeviceByTokenHash(ctx, "hash-heartbeat-001")
+	require.NoError(t, fetchErr)
+	assert.True(t, beaten.LastSeenAt.After(originalLastSeen), "心跳后 last_seen_at 应前进")
+	assert.Equal(t, int64(7), beaten.SpoolPendingBatches, "积压批次数应落库")
+	assert.Equal(t, int64(4096), beaten.SpoolPendingBytes, "积压字节数应落库")
+
+	// 未知设备心跳返回 ErrNotFound
+	assert.ErrorIs(t, deviceStore.TouchDeviceHeartbeat(ctx, "dev-unknown", 0, 0), ErrNotFound)
+}
+
 func TestListDevicesOrdersByLastSeenDesc(t *testing.T) {
 	testPool := newTestPool(t)
 	resetTablesForTest(t, testPool, "devices")

@@ -41,10 +41,12 @@ func NewHandler(service *Service) *Handler {
 // 携 Token 路由由装配方挂在 RequireDeviceToken 中间件之后：
 //   - POST /api/v1/events/batch
 //   - GET  /api/v1/devices/rules（规则中心下发：终端常驻进程周期拉取）
+//   - POST /api/v1/agent/heartbeat（常驻心跳：刷新在线态 + 上报 spool 积压）
 func (handler *Handler) RegisterRoutes(router gin.IRouter) {
 	router.POST("/api/v1/devices/register", handler.HandleRegister)
 	router.POST("/api/v1/events/batch", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleEventsBatch)
 	router.GET("/api/v1/devices/rules", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleDeviceRules)
+	router.POST("/api/v1/agent/heartbeat", auth.RequireDeviceToken(handler.service.eventStore), handler.HandleHeartbeat)
 }
 
 // HandleRegister 处理设备注册（统一门禁=管理员一次性安装凭据）：
@@ -137,4 +139,34 @@ func (handler *Handler) HandleDeviceRules(routerCtx *gin.Context) {
 		return
 	}
 	routerCtx.JSON(http.StatusOK, rulesPayload)
+}
+
+// HandleHeartbeat 处理常驻心跳上报（前置 RequireDeviceToken 中间件）：
+// 刷新设备 last_seen 并把终端带外积压（断网缓存未送达的批次数/字节数）落库，
+// 供控制台 online/abnormal 判定。body {spool_pending_batches, spool_pending_bytes}，
+// 字段必须为非负整数；心跳不产生事件、不触发告警。
+func (handler *Handler) HandleHeartbeat(routerCtx *gin.Context) {
+	deviceRow, hasDevice := auth.DeviceFrom(routerCtx)
+	if !hasDevice {
+		routerCtx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "设备身份缺失"})
+		return
+	}
+	var heartbeatInput struct {
+		SpoolPendingBatches int64 `json:"spool_pending_batches"`
+		SpoolPendingBytes   int64 `json:"spool_pending_bytes"`
+	}
+	if bindErr := routerCtx.ShouldBindJSON(&heartbeatInput); bindErr != nil {
+		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
+		return
+	}
+	if heartbeatInput.SpoolPendingBatches < 0 || heartbeatInput.SpoolPendingBytes < 0 {
+		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "积压字段必须为非负整数"})
+		return
+	}
+	if heartbeatErr := handler.service.eventStore.TouchDeviceHeartbeat(routerCtx.Request.Context(),
+		deviceRow.DeviceID, heartbeatInput.SpoolPendingBatches, heartbeatInput.SpoolPendingBytes); heartbeatErr != nil {
+		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "心跳写入失败"})
+		return
+	}
+	routerCtx.JSON(http.StatusOK, gin.H{"ok": true, "device_id": deviceRow.DeviceID})
 }

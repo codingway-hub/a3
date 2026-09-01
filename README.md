@@ -154,6 +154,7 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 | `A3_STATE_DIR` | 身份/位点状态目录 | `~/.a3` |
 | `A3_BATCH_SIZE` | 上报批大小（上限 500，超限服务端整批拒绝） | 200 |
 | `A3_FLUSH_INTERVAL` | 批量化冲刷间隔（秒） | 2s |
+| `A3_HEARTBEAT_INTERVAL_SECONDS` | 常驻心跳周期（秒，下限 5）；心跳刷新设备在线态并上报断网缓存积压（控制台「数据滞留」判定）；≤0 关闭（仅靠事件上报维持在线） | 30 |
 | `A3_MASK_ENABLED` | 敏感片段脱敏开关 | `true` |
 | `A3_INSECURE_SKIP_TLS_VERIFY` | 跳过证书校验(自签名) | `false` |
 | `A3_LOG_LEVEL` | debug/info/warn/error | `info` |

@@ -267,3 +267,58 @@ func TestGetDeviceRulesClassifiesFailures(t *testing.T) {
 	_, fetchErr = tokenlessUploader.GetDeviceRules(context.Background())
 	require.ErrorAs(t, fetchErr, &nonRetryableErr, "无 Token 直接归类不可重试")
 }
+
+func TestHeartbeatPostsBacklogAndClassifiesFailures(t *testing.T) {
+	type receivedHeartbeat struct {
+		SpoolPendingBatches int64 `json:"spool_pending_batches"`
+		SpoolPendingBytes   int64 `json:"spool_pending_bytes"`
+	}
+
+	t.Run("成功上报积压且认证正确", func(t *testing.T) {
+		var seenAuthorization string
+		var seenPath string
+		var receivedBody receivedHeartbeat
+		fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			seenPath = request.URL.Path
+			seenAuthorization = request.Header.Get("Authorization")
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&receivedBody))
+			_, _ = responseWriter.Write([]byte(`{"ok":true,"device_id":"dev-t"}`))
+		}))
+		defer fakeServer.Close()
+
+		testUploader := newTestUploader(t, fakeServer.URL)
+		require.NoError(t, testUploader.Heartbeat(context.Background(), 7, 4096))
+
+		assert.Equal(t, "/api/v1/agent/heartbeat", seenPath)
+		assert.Equal(t, "Bearer a3d_test-token", seenAuthorization)
+		assert.Equal(t, int64(7), receivedBody.SpoolPendingBatches)
+		assert.Equal(t, int64(4096), receivedBody.SpoolPendingBytes)
+	})
+
+	t.Run("5xx 视为瞬时可重试", func(t *testing.T) {
+		fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			http.Error(responseWriter, `{"error":"内部错误"}`, http.StatusInternalServerError)
+		}))
+		defer fakeServer.Close()
+
+		testUploader := newTestUploader(t, fakeServer.URL)
+		heartbeatErr := testUploader.Heartbeat(context.Background(), 0, 0)
+		require.Error(t, heartbeatErr)
+		var nonRetryableErr *NonRetryableError
+		assert.False(t, errors.As(heartbeatErr, &nonRetryableErr), "5xx 不应归类为拒绝类错误")
+	})
+
+	t.Run("401 归类 NonRetryableError 供调用方停止心跳", func(t *testing.T) {
+		fakeServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			http.Error(responseWriter, `{"error":"设备已吊销"}`, http.StatusUnauthorized)
+		}))
+		defer fakeServer.Close()
+
+		testUploader := newTestUploader(t, fakeServer.URL)
+		heartbeatErr := testUploader.Heartbeat(context.Background(), 0, 0)
+		require.Error(t, heartbeatErr)
+		var nonRetryableErr *NonRetryableError
+		require.ErrorAs(t, heartbeatErr, &nonRetryableErr)
+		assert.Equal(t, http.StatusUnauthorized, nonRetryableErr.StatusCode)
+	})
+}

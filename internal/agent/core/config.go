@@ -19,6 +19,13 @@ const MaxBatchEvents = 500
 // PluginAll 插件选择的特殊值：启用全部编译内置插件（见各插件包在装配处的构造函数表）。
 const PluginAll = "all"
 
+// DefaultHeartbeatInterval 默认心跳周期；0 或负值表示关闭常驻心跳。
+const DefaultHeartbeatInterval = 30 * time.Second
+
+// heartbeatIntervalFloorSeconds 心跳周期下限：过短周期会把服务端当轮询靶子，
+// 也放大了数据库写放大（每拍一写）。
+const heartbeatIntervalFloorSeconds = 5
+
 // Config 终端采集器运行配置；CLI flag 优先级高于环境变量，环境变量高于默认值。
 type Config struct {
 	ServerURL               string        // 服务端地址（http/https）
@@ -29,6 +36,7 @@ type Config struct {
 	SpoolQuarantineMaxBytes int64         // 断网缓存隔离区容量上限；0=默认 128MB
 	BatchSize               int           // 单批上报事件数上限（1~500）
 	FlushInterval           time.Duration // 批量化冲刷间隔
+	HeartbeatInterval       time.Duration // 常驻心跳周期；≤0 关闭心跳（在线态仅靠事件上报维持）
 	MaskEnabled             bool          // 终端侧脱敏开关
 	InsecureTLS             bool          // 跳过 TLS 证书校验（仅自签名单机部署场景使用）
 	LogLevel                string        // 日志级别：debug|info|warn|error
@@ -39,16 +47,17 @@ type Config struct {
 func Default(homeDir string) Config {
 	stateDir := filepath.Join(homeDir, ".a3")
 	return Config{
-		ServerURL:     "",
-		DeviceToken:   "",
-		SpoolDir:      filepath.Join(stateDir, "spool"),
-		StateDir:      stateDir,
-		BatchSize:     200,
-		FlushInterval: 2 * time.Second,
-		MaskEnabled:   true,
-		InsecureTLS:   false,
-		LogLevel:      "info",
-		Plugins:       []string{PluginAll},
+		ServerURL:         "",
+		DeviceToken:       "",
+		SpoolDir:          filepath.Join(stateDir, "spool"),
+		StateDir:          stateDir,
+		BatchSize:         200,
+		FlushInterval:     2 * time.Second,
+		HeartbeatInterval: DefaultHeartbeatInterval,
+		MaskEnabled:       true,
+		InsecureTLS:       false,
+		LogLevel:          "info",
+		Plugins:           []string{PluginAll},
 	}
 }
 
@@ -84,6 +93,16 @@ func (config *Config) ApplyEnv(getenv func(string) string) {
 	if flushIntervalText := getenv("A3_FLUSH_INTERVAL"); flushIntervalText != "" {
 		if flushSeconds, parseErr := strconv.Atoi(flushIntervalText); parseErr == nil && flushSeconds > 0 {
 			config.FlushInterval = time.Duration(flushSeconds) * time.Second
+		}
+	}
+	if heartbeatIntervalText := getenv("A3_HEARTBEAT_INTERVAL_SECONDS"); heartbeatIntervalText != "" {
+		if heartbeatSeconds, parseErr := strconv.Atoi(heartbeatIntervalText); parseErr == nil {
+			// ≤0 显式关闭心跳（统一归一为 0）；正数交由 Validate 校验下限
+			if heartbeatSeconds <= 0 {
+				config.HeartbeatInterval = 0
+			} else {
+				config.HeartbeatInterval = time.Duration(heartbeatSeconds) * time.Second
+			}
 		}
 	}
 	if maskText := getenv("A3_MASK_ENABLED"); maskText != "" {
@@ -161,6 +180,10 @@ func (config Config) Validate() error {
 	}
 	if config.FlushInterval < 100*time.Millisecond {
 		return fmt.Errorf("flush_interval 过短: %s（至少 100ms，避免空转）", config.FlushInterval)
+	}
+	// ≤0 由调用方视为「关闭心跳」（仅靠事件上报维持在线态），不做报错
+	if config.HeartbeatInterval > 0 && config.HeartbeatInterval < heartbeatIntervalFloorSeconds*time.Second {
+		return fmt.Errorf("heartbeat_interval 过短: %s（至少 %ds，避免高频空转）", config.HeartbeatInterval, heartbeatIntervalFloorSeconds)
 	}
 	switch config.LogLevel {
 	case "debug", "info", "warn", "error":

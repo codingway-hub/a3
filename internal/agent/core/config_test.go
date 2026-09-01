@@ -18,6 +18,7 @@ func TestDefaultDerivesDirsUnderHome(t *testing.T) {
 	assert.Equal(t, "/Users/demo/.a3", config.StateDir)
 	assert.Equal(t, 200, config.BatchSize)
 	assert.Equal(t, 2*time.Second, config.FlushInterval)
+	assert.Equal(t, DefaultHeartbeatInterval, config.HeartbeatInterval, "心跳默认 30s")
 	assert.True(t, config.MaskEnabled, "脱敏默认开启")
 	assert.False(t, config.InsecureTLS)
 	assert.Equal(t, "info", config.LogLevel)
@@ -45,6 +46,7 @@ func TestValidateRejectsInvalidValues(t *testing.T) {
 		{"BatchSize 过小", func(config *Config) { config.BatchSize = 0 }, []string{"batch_size"}},
 		{"BatchSize 超服务端上限", func(config *Config) { config.BatchSize = MaxBatchEvents + 1 }, []string{"batch_size", "500"}},
 		{"FlushInterval 过短", func(config *Config) { config.FlushInterval = 10 * time.Millisecond }, []string{"flush_interval"}},
+		{"HeartbeatInterval 过短", func(config *Config) { config.HeartbeatInterval = 2 * time.Second }, []string{"heartbeat_interval"}},
 		{"日志级别不合法", func(config *Config) { config.LogLevel = "verbose" }, []string{"log_level"}},
 	}
 	for _, testCase := range testCases {
@@ -68,6 +70,7 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 		"A3_DEVICE_TOKEN":               "a3d_abc123",
 		"A3_BATCH_SIZE":                 "50",
 		"A3_FLUSH_INTERVAL":             "5",
+		"A3_HEARTBEAT_INTERVAL_SECONDS": "45",
 		"A3_MASK_ENABLED":               "false",
 		"A3_INSECURE_SKIP_TLS_VERIFY":   "true",
 		"A3_LOG_LEVEL":                  "debug",
@@ -80,6 +83,7 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 	assert.Equal(t, "a3d_abc123", baseConfig.DeviceToken)
 	assert.Equal(t, 50, baseConfig.BatchSize)
 	assert.Equal(t, 5*time.Second, baseConfig.FlushInterval)
+	assert.Equal(t, 45*time.Second, baseConfig.HeartbeatInterval, "A3_HEARTBEAT_INTERVAL_SECONDS 应解析为秒")
 	assert.False(t, baseConfig.MaskEnabled)
 	assert.True(t, baseConfig.InsecureTLS)
 	assert.Equal(t, "debug", baseConfig.LogLevel)
@@ -104,6 +108,34 @@ func TestApplyEnvIgnoresMalformedNumbers(t *testing.T) {
 
 	assert.Equal(t, 200, config.BatchSize, "非法数字应保留默认值")
 	assert.Equal(t, 2*time.Second, config.FlushInterval, "非正数间隔应保留默认值")
+}
+
+// TestHeartbeatIntervalEnvSemantics 心跳间隔环境变量语义：
+// 非法值保留默认；0/负值显式关闭（归一 0）；低于下限的正数交由 Validate 拒绝。
+func TestHeartbeatIntervalEnvSemantics(t *testing.T) {
+	defaultWithURL := Default("/Users/demo")
+	defaultWithURL.ServerURL = "http://127.0.0.1:8080"
+
+	apply := func(envValue string) Config {
+		config := defaultWithURL
+		config.ApplyEnv(func(envName string) string {
+			if envName == "A3_HEARTBEAT_INTERVAL_SECONDS" {
+				return envValue
+			}
+			return ""
+		})
+		return config
+	}
+
+	assert.Equal(t, DefaultHeartbeatInterval, apply("not-a-number").HeartbeatInterval, "非法数字保留默认")
+	assert.Equal(t, time.Duration(0), apply("0").HeartbeatInterval, "显式 0 关闭心跳")
+	assert.Equal(t, time.Duration(0), apply("-5").HeartbeatInterval, "负值归一为关闭")
+
+	partial := apply("2")
+	assert.Equal(t, 2*time.Second, partial.HeartbeatInterval, "语法合法的短周期先透传")
+	require.Error(t, partial.Validate(), "低于下限应被 Validate 拒绝")
+
+	require.NoError(t, apply("0").Validate(), "关闭心跳属合法配置（靠事件上报维持在线态）")
 }
 
 func TestPluginsSelectionAndValidation(t *testing.T) {

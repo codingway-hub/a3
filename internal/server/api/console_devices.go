@@ -19,7 +19,30 @@ func jsonUnmarshalStrict(rawJSON []byte, target any) error {
 	return json.Unmarshal(rawJSON, target)
 }
 
-// HandleListDevices GET /devices —— 设备列表 + 在线判定。
+// DeviceHealth 设备健康态（最后心跳时间 × 终端带外积压联合判定）。
+type DeviceHealth string
+
+const (
+	DeviceHealthOnline   DeviceHealth = "online"
+	DeviceHealthAbnormal DeviceHealth = "abnormal"
+	DeviceHealthOffline  DeviceHealth = "offline"
+)
+
+// deviceHealth 计算设备健康态：
+//   - offline：最后心跳距今超过在线窗口（onlineWindow 秒）——连接已断；
+//   - abnormal：在线但最近心跳上报存在带外积压（断网缓存未送达服务端）——数据滞留；
+//   - online：在线且无积压。
+func deviceHealth(lastSeenAt time.Time, spoolPendingBatches int64, now time.Time) DeviceHealth {
+	if now.Sub(lastSeenAt) >= onlineWindow*time.Second {
+		return DeviceHealthOffline
+	}
+	if spoolPendingBatches > 0 {
+		return DeviceHealthAbnormal
+	}
+	return DeviceHealthOnline
+}
+
+// HandleListDevices GET /devices —— 设备列表 + 健康态判定。
 func (api *Router) HandleListDevices(routerCtx *gin.Context) {
 	deviceList, listErr := api.eventStore.ListDevices(routerCtx.Request.Context())
 	if listErr != nil {
@@ -28,9 +51,11 @@ func (api *Router) HandleListDevices(routerCtx *gin.Context) {
 	}
 
 	items := make([]gin.H, 0, len(deviceList))
+	nowTime := time.Now()
 	for _, deviceRow := range deviceList {
 		var plugins any
 		_ = jsonUnmarshalStrict(deviceRow.Plugins, &plugins)
+		health := deviceHealth(deviceRow.LastSeenAt, deviceRow.SpoolPendingBatches, nowTime)
 		items = append(items, gin.H{
 			"device_id":     deviceRow.DeviceID,
 			"hostname":      deviceRow.Hostname,
@@ -39,7 +64,11 @@ func (api *Router) HandleListDevices(routerCtx *gin.Context) {
 			"agent_version": deviceRow.AgentVersion,
 			"plugins":       plugins,
 			"status":        deviceRow.Status,
-			"online":        time.Since(deviceRow.LastSeenAt) < onlineWindow*time.Second,
+			// online 保留历史语义（在线窗口内即 true）；health 承载三态细节
+			"online":   health != DeviceHealthOffline,
+			"health":   health,
+			"spool_pending_batches": deviceRow.SpoolPendingBatches,
+			"spool_pending_bytes":   deviceRow.SpoolPendingBytes,
 			"first_seen_at": deviceRow.FirstSeenAt,
 			"last_seen_at":  deviceRow.LastSeenAt,
 		})

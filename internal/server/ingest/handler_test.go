@@ -179,3 +179,47 @@ func TestDeviceRulesEndpointWaterfall(t *testing.T) {
 	}
 	assert.NotEqual(t, firstPayload.Revision, secondPayload.Revision, "内容变化必须反映到 revision")
 }
+
+func TestHeartbeatEndpointTouchesSeenAndStoresBacklog(t *testing.T) {
+	engine, eventStore, _, installCode := newHandlerRouter(t)
+	ctx := context.Background()
+
+	// ① 注册设备换取真实 Token
+	registered := postJSON(engine, "/api/v1/devices/register",
+		`{"hostname":"hb-mac","os":"darwin","arch":"arm64","machine_fingerprint":"fp-heartbeat-1","install_code":"`+installCode+`"}`, "")
+	require.Equal(t, http.StatusOK, registered.Code, registered.Body.String())
+	var registerResponse struct {
+		DeviceID string `json:"device_id"`
+		Token    string `json:"token"`
+	}
+	require.NoError(t, json.Unmarshal(registered.Body.Bytes(), &registerResponse))
+
+	// ② 心跳上报积压 → 200，last_seen 与积压落库
+	beaten := postJSON(engine, "/api/v1/agent/heartbeat",
+		`{"spool_pending_batches":3,"spool_pending_bytes":8192}`, registerResponse.Token)
+	require.Equal(t, http.StatusOK, beaten.Code, beaten.Body.String())
+	devicesAfter, listErr := eventStore.ListDevices(ctx)
+	require.NoError(t, listErr)
+	require.Len(t, devicesAfter, 1)
+	assert.Equal(t, int64(3), devicesAfter[0].SpoolPendingBatches)
+	assert.Equal(t, int64(8192), devicesAfter[0].SpoolPendingBytes)
+
+	// ③ 无 Token / 伪造 Token → 401
+	assert.Equal(t, http.StatusUnauthorized, postJSON(engine, "/api/v1/agent/heartbeat",
+		`{"spool_pending_batches":0,"spool_pending_bytes":0}`, "").Code)
+	forgedToken, forgeErr := auth.GenerateDeviceToken()
+	require.NoError(t, forgeErr)
+	assert.Equal(t, http.StatusUnauthorized, postJSON(engine, "/api/v1/agent/heartbeat",
+		`{"spool_pending_batches":0,"spool_pending_bytes":0}`, forgedToken).Code)
+
+	// ④ 非法请求体 / 负积压 → 400
+	assert.Equal(t, http.StatusBadRequest, postJSON(engine, "/api/v1/agent/heartbeat",
+		`not-json`, registerResponse.Token).Code)
+	assert.Equal(t, http.StatusBadRequest, postJSON(engine, "/api/v1/agent/heartbeat",
+		`{"spool_pending_batches":-1,"spool_pending_bytes":0}`, registerResponse.Token).Code)
+
+	// ⑤ 吊销后心跳 → 401（鉴权中间件拦截，revoked 设备不再刷新在线态）
+	require.NoError(t, eventStore.SetDeviceStatus(ctx, registerResponse.DeviceID, "revoked"))
+	assert.Equal(t, http.StatusUnauthorized, postJSON(engine, "/api/v1/agent/heartbeat",
+		`{"spool_pending_batches":0,"spool_pending_bytes":0}`, registerResponse.Token).Code)
+}

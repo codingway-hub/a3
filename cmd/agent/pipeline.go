@@ -140,6 +140,14 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	rulesSyncDone := make(chan struct{})
 	go ruleSyncLoop(ctx, uploaderClient, agentConfig.StateDir, logger, rulesSyncDone)
 
+	// 常驻心跳：周期刷新设备在线态并上报 spool 待送达积压，供控制台
+	// online/abnormal 判定。关闭心跳（interval≤0）时立即退出，仅靠事件上报维持在线态
+	if agentConfig.HeartbeatInterval <= 0 {
+		logger.Info("常驻心跳已关闭(仅靠事件上报维持在线态)", slog.String("env", "A3_HEARTBEAT_INTERVAL_SECONDS"))
+	}
+	heartbeatDone := make(chan struct{})
+	go heartbeatLoop(ctx, uploaderClient, spoolQueue, agentConfig.HeartbeatInterval, logger, heartbeatDone)
+
 	logger.Info("a3 终端采集器已启动",
 		slog.String("server", agentConfig.ServerURL),
 		slog.Int("batch_size", agentConfig.BatchSize),
@@ -166,6 +174,10 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	}
 	select {
 	case <-rulesSyncDone:
+	case <-time.After(2 * time.Second):
+	}
+	select {
+	case <-heartbeatDone:
 	case <-time.After(2 * time.Second):
 	}
 	logger.Info("a3 终端采集器已退出")

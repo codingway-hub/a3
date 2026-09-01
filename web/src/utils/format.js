@@ -27,6 +27,20 @@ export function formatDuration(startedAt, endedAt) {
   return restMinutes ? `${hours}h${restMinutes}m` : `${hours}h`
 }
 
+// formatBytes 字节数人类可读化（如 8.0 KB / 1.2 MB）
+export function formatBytes(value) {
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let unitIndex = 0
+  let scaled = value
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024
+    unitIndex++
+  }
+  const precision = unitIndex === 0 ? 0 : 1
+  return `${scaled.toFixed(precision)} ${units[unitIndex]}`
+}
+
 // severityTagType 风险等级映射 Element Plus tag 类型色
 export function severityTagType(severity) {
   switch (severity) {

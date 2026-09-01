@@ -24,9 +24,13 @@ type Device struct {
 	Status             string
 	FirstSeenAt        time.Time
 	LastSeenAt         time.Time
+	// SpoolPendingBatches / SpoolPendingBytes 最近一次心跳上报的终端带外积压
+	// （断网缓存尚未送达服务端的批次数/字节数），用于数据滞留(abnormal)判定。
+	SpoolPendingBatches int64
+	SpoolPendingBytes   int64
 }
 
-const deviceColumns = `id, device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, first_seen_at, last_seen_at`
+const deviceColumns = `id, device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, first_seen_at, last_seen_at, spool_pending_batches, spool_pending_bytes`
 
 // 注册凭证哨兵错误：轮换 Token 必须证明持有既有凭证，杜绝仅凭指纹顶替他人设备。
 var (
@@ -219,7 +223,8 @@ func (store *Store) GetDeviceByTokenHash(ctx context.Context, tokenHash string) 
 		`SELECT `+deviceColumns+` FROM devices WHERE token_hash = $1`, tokenHash,
 	).Scan(&device.ID, &device.DeviceID, &device.TokenHash, &device.MachineFingerprint,
 		&device.Hostname, &device.OS, &device.Arch, &device.AgentVersion, &device.Plugins,
-		&device.Status, &device.FirstSeenAt, &device.LastSeenAt)
+		&device.Status, &device.FirstSeenAt, &device.LastSeenAt,
+		&device.SpoolPendingBatches, &device.SpoolPendingBytes)
 	if errors.Is(scanErr, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -237,6 +242,22 @@ func (store *Store) TouchDevice(ctx context.Context, deviceID string, agentVersi
 	commandTag, err := store.pool.Exec(ctx,
 		`UPDATE devices SET last_seen_at = now(), agent_version = $2, plugins = $3 WHERE device_id = $1`,
 		deviceID, agentVersion, pluginsJSON)
+	if err != nil {
+		return err
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// TouchDeviceHeartbeat 记录一次常驻心跳：刷新 last_seen_at 并落终端上报的带外积压
+// （断网缓存未送达的批次数/字节数），供 online/abnormal 判定。事件上报（TouchDevice）
+// 与心跳各自独立刷新心跳时间，任一路径都能维持设备在线。设备不存在返回 ErrNotFound。
+func (store *Store) TouchDeviceHeartbeat(ctx context.Context, deviceID string, spoolPendingBatches int64, spoolPendingBytes int64) error {
+	commandTag, err := store.pool.Exec(ctx,
+		`UPDATE devices SET last_seen_at = now(), spool_pending_batches = $2, spool_pending_bytes = $3 WHERE device_id = $1`,
+		deviceID, spoolPendingBatches, spoolPendingBytes)
 	if err != nil {
 		return err
 	}
@@ -274,7 +295,8 @@ func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
 		var device Device
 		if scanErr := rows.Scan(&device.ID, &device.DeviceID, &device.TokenHash, &device.MachineFingerprint,
 			&device.Hostname, &device.OS, &device.Arch, &device.AgentVersion, &device.Plugins,
-			&device.Status, &device.FirstSeenAt, &device.LastSeenAt); scanErr != nil {
+			&device.Status, &device.FirstSeenAt, &device.LastSeenAt,
+				&device.SpoolPendingBatches, &device.SpoolPendingBytes); scanErr != nil {
 			return nil, scanErr
 		}
 		devices = append(devices, device)
