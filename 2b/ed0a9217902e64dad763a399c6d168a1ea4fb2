@@ -1,0 +1,76 @@
+internal/agent/core/spool/spool_test.go
+  s_8301e3490dd7cb::t_f1e2c14139ba14 322-343,345-356
+  s_8301e3490dd7cb::t_3a9444162a2090 344
+README.md
+  s_8301e3490dd7cb::t_6abec1e5c075ac 157
+internal/server/api/console_devices.go
+  s_8301e3490dd7cb::t_3d02a59715b485 22-45,54,58,67-71
+web/src/utils/format.js
+  s_8301e3490dd7cb::t_5623259775909f 30-43
+internal/agent/core/config_test.go
+  s_8301e3490dd7cb::t_032f237fcdb215 73
+  s_8301e3490dd7cb::t_84c2221747e91c 49
+  s_8301e3490dd7cb::t_67c9c36414244c 113-140
+  s_8301e3490dd7cb::t_1144e9d29e635f 21
+  s_8301e3490dd7cb::t_625a03a7af3268 86
+cmd/agent/heartbeat_test.go
+  s_8301e3490dd7cb::t_6bba733a90dade 120
+  s_8301e3490dd7cb::t_0ea87e8845d64f 1-119,121-129,131-132,134-165
+  s_8301e3490dd7cb::t_68432af080c8ba 130,133
+internal/server/store/devices_test.go
+  s_8301e3490dd7cb::t_9e127c7d0f9d0f 71-93
+migrations/0012_device_heartbeat.down.sql
+  s_8301e3490dd7cb::t_4eea00d512336e 1-3
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_b4afc22db84a75 143-150
+  s_8301e3490dd7cb::t_ae8ef26955382d 179-182
+internal/server/store/devices.go
+  s_8301e3490dd7cb::t_626ecd9fa7efb2 226-227
+  s_8301e3490dd7cb::t_ce9847d7bc4d27 298-299
+  s_8301e3490dd7cb::t_910c30ea340eba 27-30,33
+  s_8301e3490dd7cb::t_f1c4c3abeea0d9 254-269
+internal/server/ingest/handler.go
+  s_8301e3490dd7cb::t_1ce16eafd84f8b 142-171
+  s_8301e3490dd7cb::t_7a704fc390f34c 44,49
+web/src/views/DevicesView.vue
+  s_8301e3490dd7cb::t_f76aaddeeac11d 3-9,11,13-22,73,76,84-95,144-172,178,181,186-191,198
+internal/server/ingest/handler_test.go
+  s_8301e3490dd7cb::t_1425f683d47c1e 182-225
+internal/server/api/console_devices_test.go
+  s_8301e3490dd7cb::t_837af9165a7864 1-44,46-112
+  s_8301e3490dd7cb::t_4bf220f1a6173f 45
+internal/agent/core/spool/spool.go
+  s_8301e3490dd7cb::t_0a21b86754cd8b 237-266
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_6a3af8dcda623e 148-192
+cmd/agent/heartbeat.go
+  s_8301e3490dd7cb::t_e9eb0e521ac542 1-68
+internal/agent/core/config.go
+  s_8301e3490dd7cb::t_4af0ff963ba66c 98-99,106-107
+  s_8301e3490dd7cb::t_918ca9c5fbf707 100-105
+  s_8301e3490dd7cb::t_a33ea36e23710e 185-187
+  s_8301e3490dd7cb::t_4ff8b30574e2aa 22-28,39
+  s_8301e3490dd7cb::t_577e0e8be61065 50-60
+  s_8301e3490dd7cb::t_53f4cb281a955a 184
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_d746a8906154fb 270-307,309-324
+  s_8301e3490dd7cb::t_e8d103f47f8f08 308
+migrations/0012_device_heartbeat.up.sql
+  s_8301e3490dd7cb::t_30bc312603ab37 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2bed0a9217902e64dad763a399c6d168a1ea4fb2",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
