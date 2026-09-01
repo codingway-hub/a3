@@ -11,22 +11,34 @@ import (
 
 // 控制台敏感操作审计：action 与 target_type 的合法取值（与迁移 0008/0010 的 CHECK 约束同源）。
 const (
-	AuditActionRuleCreate    = "rule_create"
-	AuditActionRuleUpdate    = "rule_update"
-	AuditActionRulePatch     = "rule_patch"
-	AuditActionRuleDelete    = "rule_delete"
-	AuditActionDeviceRevoke  = "device_revoke"
-	AuditActionDeviceRestore = "device_restore"
-	AuditActionUserCreate    = "user_create"
-	AuditActionUserUpdate    = "user_update"
+	AuditActionRuleCreate     = "rule_create"
+	AuditActionRuleUpdate     = "rule_update"
+	AuditActionRulePatch      = "rule_patch"
+	AuditActionRuleDelete     = "rule_delete"
+	AuditActionDeviceRevoke   = "device_revoke"
+	AuditActionDeviceRestore  = "device_restore"
+	AuditActionUserCreate     = "user_create"
+	AuditActionUserUpdate     = "user_update"
 
 	AuditActionUserPasswordReset = "user_password_reset"
+
+	// AuditActionDeviceTokenRotate 管理员批准的设备 Token 轮换（重复注册不再
+	// 无条件换发——唯一换发通道，须人工批准并留痕）。
+	AuditActionDeviceTokenRotate = "device_token_rotate"
+
+	// AuditActionCredentialCreate / AuditActionCredentialRevoke 安装凭据（注册门禁）
+	// 的生成与吊销。
+	AuditActionCredentialCreate = "credential_create"
+	AuditActionCredentialRevoke = "credential_revoke"
 
 	auditTargetRule   = "rule"
 	auditTargetDevice = "device"
 
 	// AuditTargetUser 用户账号类审计的目标类型（api 层用户管理留痕用）。
 	AuditTargetUser = "user"
+
+	// AuditTargetCredential 安装凭据类审计的目标类型（api 层凭据管理留痕用）。
+	AuditTargetCredential = "credential"
 )
 
 // AuditEntry 对应 audit_log 表一行；Before/After 为变更前后 JSONB 快照原文。

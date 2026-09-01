@@ -21,25 +21,23 @@ const onlineWindow = 5 * 60 // 秒
 
 // Router 持有服务端依赖并负责装配 gin 引擎。
 type Router struct {
-	eventStore        *store.Store
-	alertService      *alert.Service
-	deviceAPI         *ingest.Handler // 设备侧接入（注册/上报）；nil 则不挂载
-	jwtSecret         string
-	webDist           string            // 前端静态目录；为空则不托管
-	agentDist         string            // 采集器发布产物目录；为空则不提供下载
-	allowAutoRegister bool              // setup-info 向指南页透出注册开关状态
-	publicURL         string            // 对外公开地址（配置即权威，反代场景）；空则按请求 Host 推导
-	agentAssetPaths   map[string]string // 白名单产物名 → 磁盘路径，启动期建立，绝不拼接用户输入
+	eventStore      *store.Store
+	alertService    *alert.Service
+	deviceAPI       *ingest.Handler // 设备侧接入（注册/上报）；nil 则不挂载
+	jwtSecret       string
+	webDist         string            // 前端静态目录；为空则不托管
+	agentDist       string            // 采集器发布产物目录；为空则不提供下载
+	publicURL       string            // 对外公开地址（配置即权威，反代场景）；空则按请求 Host 推导
+	agentAssetPaths map[string]string // 白名单产物名 → 磁盘路径，启动期建立，绝不拼接用户输入
 }
 
 // RouterConfig 是装配参数。
 type RouterConfig struct {
-	JWTSecret         string
-	WebDist           string
-	AgentDist         string
-	AllowAutoRegister bool
-	PublicURL         string
-	DeviceAPI         *ingest.Handler
+	JWTSecret string
+	WebDist   string
+	AgentDist string
+	PublicURL string
+	DeviceAPI *ingest.Handler
 }
 
 // NewRouter 构建装配器。
@@ -51,15 +49,14 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		}
 	}
 	return &Router{
-		eventStore:        eventStore,
-		alertService:      alertService,
-		deviceAPI:         routerConfig.DeviceAPI,
-		jwtSecret:         routerConfig.JWTSecret,
-		webDist:           routerConfig.WebDist,
-		agentDist:         routerConfig.AgentDist,
-		allowAutoRegister: routerConfig.AllowAutoRegister,
-		publicURL:         routerConfig.PublicURL,
-		agentAssetPaths:   agentAssetPaths,
+		eventStore:      eventStore,
+		alertService:    alertService,
+		deviceAPI:       routerConfig.DeviceAPI,
+		jwtSecret:       routerConfig.JWTSecret,
+		webDist:         routerConfig.WebDist,
+		agentDist:       routerConfig.AgentDist,
+		publicURL:       routerConfig.PublicURL,
+		agentAssetPaths: agentAssetPaths,
 	}
 }
 
@@ -101,7 +98,7 @@ func (api *Router) Setup() *gin.Engine {
 		protectedGroup.GET("/rules", api.HandleListRules)
 		protectedGroup.GET("/audit-log", api.HandleListAuditLog)
 
-		// 危险写操作 admin-only：规则变更、设备吊销/恢复、用户管理
+		// 危险写操作 admin-only：规则变更、设备吊销/恢复、用户管理、安装凭据、设备 Token 轮换
 		adminOnlyGroup := protectedGroup.Group("", auth.RequireRole("admin"))
 		{
 			adminOnlyGroup.POST("/rules", api.HandleCreateRule)
@@ -109,6 +106,11 @@ func (api *Router) Setup() *gin.Engine {
 			adminOnlyGroup.DELETE("/rules/:ruleID", api.HandleDeleteRule)
 			adminOnlyGroup.PATCH("/rules/:ruleID", api.HandlePatchRule)
 			adminOnlyGroup.PATCH("/devices/:deviceID", api.HandlePatchDeviceStatus)
+			adminOnlyGroup.POST("/devices/:deviceID/token", api.HandleRotateDeviceToken)
+			adminOnlyGroup.GET("/credentials", api.HandleListInstallCredentials)
+			adminOnlyGroup.POST("/credentials", api.HandleCreateInstallCredential)
+			adminOnlyGroup.POST("/credentials/:credentialID/revoke", api.HandleRevokeInstallCredential)
+			adminOnlyGroup.GET("/credentials/:credentialID/uses", api.HandleListCredentialUses)
 			adminOnlyGroup.GET("/users", api.HandleListUsers)
 			adminOnlyGroup.POST("/users", api.HandleCreateUser)
 			adminOnlyGroup.PATCH("/users/:userID", api.HandlePatchUser)

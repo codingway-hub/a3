@@ -171,6 +171,7 @@ func TestRegisterDeviceParsesResultAndRejectsErrors(t *testing.T) {
 			var registerRequest map[string]any
 			require.NoError(t, json.NewDecoder(request.Body).Decode(&registerRequest))
 			if registerRequest["machine_fingerprint"] == "fp-ok" {
+				require.Equal(t, "a3i_abcdef", registerRequest["install_code"], "安装凭据应随注册请求体提交")
 				_, _ = responseWriter.Write([]byte(`{"device_id":"dev-xyz","token":"a3d_fresh"}`))
 				return
 			}
@@ -182,7 +183,7 @@ func TestRegisterDeviceParsesResultAndRejectsErrors(t *testing.T) {
 				http.Error(responseWriter, `{"error":"设备已存在：注册须携带当前 Token"}`, http.StatusConflict)
 				return
 			}
-			http.Error(responseWriter, `{"error":"自动注册已关闭"}`, http.StatusForbidden)
+			http.Error(responseWriter, `{"error":"安装凭据无效"}`, http.StatusForbidden)
 			return
 		}
 		responseWriter.WriteHeader(http.StatusNotFound)
@@ -191,7 +192,8 @@ func TestRegisterDeviceParsesResultAndRejectsErrors(t *testing.T) {
 
 	testUploader := newTestUploader(t, fakeServer.URL)
 	registration, registerErr := testUploader.RegisterDevice(context.Background(),
-		DeviceInfo{Hostname: "mac", OS: "darwin", Arch: "arm64", MachineFingerprint: "fp-ok"}, "")
+		DeviceInfo{Hostname: "mac", OS: "darwin", Arch: "arm64", MachineFingerprint: "fp-ok",
+			InstallCode: "a3i_abcdef"}, "")
 	require.NoError(t, registerErr)
 	assert.Equal(t, RegistrationResult{DeviceID: "dev-xyz", Token: "a3d_fresh"}, registration)
 

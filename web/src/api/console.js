@@ -81,7 +81,7 @@ export function fetchAuditLog(query = {}) {
   return apiClient.get('/audit-log', { params: query })
 }
 
-// fetchSetupInfo 接入指南页信息（公开端点）：注册开关、产物就绪、公开地址
+// fetchSetupInfo 接入指南页信息（公开端点）：产物就绪状态、公开地址
 export function fetchSetupInfo() {
   return apiClient.get('/setup-info')
 }
@@ -106,4 +106,27 @@ export function patchUser(userId, userBody) {
 // resetUserPassword 管理员重置口令；body：{password}
 export function resetUserPassword(userId, password) {
   return apiClient.patch(`/users/${encodeURIComponent(userId)}/password`, { password })
+}
+
+// —— 安装凭据（admin-only 注册门禁） ——
+
+// fetchInstallCredentials 安装凭据列表（不含明文代码，仅 code_hint 摘要）
+export function fetchInstallCredentials() {
+  return apiClient.get('/credentials')
+}
+
+// createInstallCredential 生成一次性安装凭据；body：{expires_in_minutes,max_uses,scope}
+// 响应中的 code 明文仅此一次出现，务必即时抄送给待接入用户
+export function createInstallCredential(credentialBody) {
+  return apiClient.post('/credentials', credentialBody)
+}
+
+// revokeInstallCredential 吊销凭据（即时生效；后续注册消费记 rejected_disabled）
+export function revokeInstallCredential(credentialId) {
+  return apiClient.post(`/credentials/${encodeURIComponent(credentialId)}/revoke`)
+}
+
+// fetchCredentialUses 凭据使用记录：成功/拒绝原因/设备归属/来源 IP
+export function fetchCredentialUses(credentialId, query = {}) {
+  return apiClient.get(`/credentials/${encodeURIComponent(credentialId)}/uses`, { params: query })
 }

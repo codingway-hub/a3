@@ -50,7 +50,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, Connection, Lock, Monitor, Odometer, Tickets, User, UserFilled } from '@element-plus/icons-vue'
+import { Bell, Connection, Key, Lock, Monitor, Odometer, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '../stores/auth'
 
@@ -66,6 +66,7 @@ const menuItems = [
   { path: '/devices', label: '设备管理', icon: Monitor, roles: ['admin'] },
   { path: '/rules', label: '规则管理', icon: Lock, roles: ['admin'] },
   { path: '/users', label: '用户管理', icon: User, roles: ['admin'] },
+  { path: '/credentials', label: '安装凭据', icon: Key, roles: ['admin'] },
   { path: '/setup-guide', label: '接入指南', icon: Connection, roles: null },
 ]
 

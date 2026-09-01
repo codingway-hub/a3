@@ -56,18 +56,21 @@ func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 
 // FindDeviceIDByFingerprint 按机器指纹反查设备 ID；未注册过返回 ErrNotFound。
 
-// RegisterDeviceAtomic 原子完成「注册或凭证证明轮换」，单事务内对指纹行取锁，
+// RegisterDeviceAtomic 原子完成「注册或同身份复用」，单事务内对指纹行取锁，
 // 杜绝原先「查-改」两步间的并发竞态与无凭证顶替：
 //   - 指纹行不存在 → 插入新设备（active；status/时间戳回填 device）；
 //   - active 指纹行存在 → 必须携带旧 Token 作凭证：无凭证 ErrCredentialRequired、
-//     凭证不符 ErrCredentialMismatch；匹配则原地轮换 token_hash 并刷新心跳，
-//     设备身份不变（防顶替）；
+//     凭证不符 ErrCredentialMismatch；匹配则复用既有身份，仅刷新心跳，
+//     **不轮换 Token**——Token 换发只在管理员批准路径（RotateDeviceTokenWithAudit）
+//     进行，杜绝普通重复注册被利用无条件轮换顶替；设备身份不变（防顶替）；
 //   - 仅 revoked 历史行存在（指纹已释放）→ 直接新建 active 行，无需旧凭证——管理员
 //     吊销后令牌丢失的恢复路径；吊销旧行保留作为审计留痕（部分唯一索引下同指纹可
 //     并存 active/revoked）。
 //
-// 返回 (deviceID, created, error)：created=true 为新注册；配合 partial unique 索引，
-// 并发插入同指纹 active 行时由 23505 兜底并归一为 ErrCredentialRequired。
+// 返回 (deviceID, created, error)：created=true 为新注册并已写入新 Token；
+// created=false 为凭据匹配复用（调用方不应下发新 Token，终端保留既有 Token）。
+// 配合 partial unique 索引，并发插入同指纹 active 行时由 23505 兜底并归一为
+// ErrCredentialRequired。
 func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 	device *Device, claimedTokenHash string) (string, bool, error) {
 
@@ -107,10 +110,9 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 		if subtle.ConstantTimeCompare([]byte(claimedTokenHash), []byte(storedTokenHash)) != 1 {
 			return "", false, ErrCredentialMismatch
 		}
-		// 凭证匹配：原地轮换，设备身份不变。
+		// 凭证匹配：复用既有身份，不轮换 Token（轮换仅限管理员批准通道）。
 		if _, updateErr := tx.Exec(ctx,
-			`UPDATE devices SET token_hash = $2, last_seen_at = now() WHERE device_id = $1`,
-			existingDeviceID, device.TokenHash); updateErr != nil {
+			`UPDATE devices SET last_seen_at = now() WHERE device_id = $1`, existingDeviceID); updateErr != nil {
 			return "", false, updateErr
 		}
 		return existingDeviceID, false, tx.Commit(ctx)
@@ -124,6 +126,33 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 		return "", false, mapFingerprintConflict(insertErr)
 	}
 	return device.DeviceID, true, tx.Commit(ctx)
+}
+
+// RotateDeviceTokenWithAudit 管理员批准的设备 Token 轮换（普通重复注册不再轮换，
+// 本方法为唯一换发通道）：换哈希并同事务落 device_token_rotate 审计，后续须人工
+// 把新明文 Token 交给设备主；设备不存在返回 ErrNotFound。
+func (store *Store) RotateDeviceTokenWithAudit(ctx context.Context, deviceID string, newTokenHash string, operator string) error {
+	return store.withTx(ctx, func(tx pgx.Tx) error {
+		var beforeStatus string
+		scanErr := tx.QueryRow(ctx,
+			`SELECT status FROM devices WHERE device_id = $1 FOR UPDATE`, deviceID).Scan(&beforeStatus)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+		if beforeStatus != "active" {
+			return ErrNotFound // 仅 active 行可换发；已吊销设备走吊销后重注册
+		}
+		if _, execErr := tx.Exec(ctx,
+			`UPDATE devices SET token_hash = $2, last_seen_at = now() WHERE device_id = $1`,
+			deviceID, newTokenHash); execErr != nil {
+			return execErr
+		}
+		return appendAuditInTx(ctx, tx, AuditActionDeviceTokenRotate, auditTargetDevice, deviceID, operator,
+			[]byte(`{"action":"token_rotate"}`), []byte(`{"action":"token_rotate","status":"active"}`))
+	})
 }
 
 // insertDeviceInTx 在给定事务内插入设备并回填 id/status/时间戳。

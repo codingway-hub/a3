@@ -24,12 +24,15 @@ const (
 	DefaultRetryCap     = 60 * time.Second
 )
 
-// DeviceInfo 设备注册请求信息（指纹幂等键）。
+// DeviceInfo 设备注册请求信息（指纹幂等键 + 管理员下发的安装凭据）。
 type DeviceInfo struct {
 	Hostname           string `json:"hostname"`
 	OS                 string `json:"os"`
 	Arch               string `json:"arch"`
 	MachineFingerprint string `json:"machine_fingerprint"`
+	// InstallCode 管理员的注册门禁凭据；仅经 HTTPS 请求体传输，
+	// 绝不进入 URL/命令行参数/脚本内容/日志（客户端交互式读取后此处提交）。
+	InstallCode string `json:"install_code"`
 }
 
 // RegistrationResult 设备注册响应。
@@ -143,8 +146,9 @@ func (uploader *Uploader) GetDeviceRules(ctx context.Context) (schema.DeviceRule
 }
 
 // RegisterDevice 注册设备并换取一次性下发的设备 Token。
-// credentialToken 为既有设备 Token（可选）：同指纹注册时作为凭证证明
-// （附 Authorization 头），服务端校验通过才轮换；新设备首次注册传空串即可。
+// deviceInfo.InstallCode 是管理员下发的一次性安装凭据（注册门禁，必需）；
+// credentialToken 为既有设备 Token（可选）：同指纹命中既有 active 设备时作为
+// 身份证明，服务端校验通过后复用身份、不轮换 Token；新设备首次注册传空串即可。
 func (uploader *Uploader) RegisterDevice(ctx context.Context, deviceInfo DeviceInfo, credentialToken string) (RegistrationResult, error) {
 	var registrationResult RegistrationResult
 	requestBody, marshalErr := json.Marshal(deviceInfo)

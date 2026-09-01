@@ -23,6 +23,19 @@ func GenerateDeviceToken() (string, error) {
 	return deviceTokenPrefix + hex.EncodeToString(randomBytes), nil
 }
 
+// installCodePrefix 是安装凭据代码的可辨识前缀（注册门禁，区别于设备 Token）。
+const installCodePrefix = "a3i_"
+
+// GenerateInstallCode 生成安装凭据明文代码："a3i_" + 32 字节随机数的 hex（总长 68 字符）。
+// 明文仅在生成接口响应中出现一次；服务端只持久化 HashToken 摘要，注册消费时比对哈希。
+func GenerateInstallCode() (string, error) {
+	randomBytes := make([]byte, 32)
+	if _, readErr := rand.Read(randomBytes); readErr != nil {
+		return "", readErr
+	}
+	return installCodePrefix + hex.EncodeToString(randomBytes), nil
+}
+
 // HashToken 计算设备 Token 的 SHA-256 hex 摘要（小写），即 devices.token_hash 的入库形态。
 func HashToken(token string) string {
 	digest := sha256.Sum256([]byte(token))

@@ -68,6 +68,12 @@ const router = createRouter({
           meta: { title: '用户管理', roles: ['admin'] },
         },
         {
+          path: 'credentials',
+          name: 'credentials',
+          component: () => import('../views/CredentialsView.vue'),
+          meta: { title: '安装凭据', roles: ['admin'] },
+        },
+        {
           path: 'setup-guide',
           name: 'setup-guide-console',
           component: () => import('../views/SetupGuideView.vue'),

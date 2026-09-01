@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -20,7 +19,6 @@ type Config struct {
 	AdminUsername          string
 	AdminPassword          string
 	AdminPasswordGenerated bool
-	AllowAutoRegister      bool   // 对应 A3_ALLOW_AUTO_REGISTER，默认关闭；单机自助接入需显式开启
 	WebDist                string // 前端静态目录；空则不托管
 	PublicURL              string // 对外公开地址 A3_PUBLIC_URL（反代场景配置即权威）；空则按请求 Host 推导
 	AgentDist              string // 采集器发布产物目录 A3_AGENT_DIST；空则不提供下载与指南页产物提示
@@ -72,12 +70,6 @@ func Load() (*Config, error) {
 	default:
 		return nil, fmt.Errorf("A3_NOTIFY_MIN_SEVERITY 非法值 %q（合法值：low、medium、high）",
 			serverConfig.NotifyMinSeverity)
-	}
-
-	var err error
-	serverConfig.AllowAutoRegister, err = strconv.ParseBool(envOrDefault("A3_ALLOW_AUTO_REGISTER", "false"))
-	if err != nil {
-		return nil, fmt.Errorf("A3_ALLOW_AUTO_REGISTER 不是合法布尔值: %w", err)
 	}
 
 	// JWT 密钥未配置时随机生成：重启后所有控制台会话失效（仅提示，不阻断）

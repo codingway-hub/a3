@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -26,15 +27,32 @@ const (
 	maxBatchEvents = 500 // 单批事件上限，超出整批拒绝
 	titleMaxRunes  = 50  // 会话标题截取长度
 	deviceIDPrefix = "dev-"
+
+	maxInstallCodeLen    = 128 // 安装凭据明文长度上限（`a3i_` + 64 位 hex）
+	maxFingerprintLen    = 256 // 机器指纹长度上限
+	registerFieldMaxLen  = 255 // hostname 等文本字段长度上限
+	registerArchMaxLen   = 64  // arch 字段长度上限
 )
 
+// installCodePattern 安装凭据格式：a3i_ 前缀 + 32 字节随机数 hex。只做格式闸门，
+// 有效性由 store 原子消费判定。
+var installCodePattern = regexp.MustCompile(`^a3i_[a-f0-9]{64}$`)
+
 var (
-	// ErrAutoRegisterDisabled 未开放自动注册（分布式模式下改控制台预生成）。
-	ErrAutoRegisterDisabled = errors.New("自动注册未开放")
 	// ErrBatchTooLarge 单批事件数超限。
 	ErrBatchTooLarge = fmt.Errorf("单批事件数超过上限 %d", maxBatchEvents)
 	// ErrEventInvalid 事件校验失败或设备归属不符。
 	ErrEventInvalid = errors.New("事件不合法")
+
+	// 注册凭据（安装代码）校验哨兵错误：格式非法 / 无效 / 过期 / 停用 / 用量用尽。
+	// 对应 store 的 ConsumeInstallCredential 拒绝分类，由 handler 映射为 4xx。
+	ErrCredentialInvalid  = errors.New("安装凭据格式不合法")
+	ErrCredentialUnknown  = errors.New("安装凭据无效")
+	ErrCredentialExpired  = errors.New("安装凭据已过期")
+	ErrCredentialDisabled = errors.New("安装凭据已停用")
+	ErrCredentialUsedUp   = errors.New("安装凭据用量已用尽")
+	// ErrRateLimited 注册接口限流（同一来源 IP 短时间内请求过多）。
+	ErrRateLimited = errors.New("注册请求过于频繁，请稍后再试")
 )
 
 // RegisterInput 是设备注册请求的业务字段。
@@ -43,6 +61,9 @@ type RegisterInput struct {
 	OS                 string `json:"os"`
 	Arch               string `json:"arch"`
 	MachineFingerprint string `json:"machine_fingerprint"`
+	// InstallCode 管理员下发的一次性安装凭据明文；绝不进入 URL/命令行/日志，
+	// 仅经 HTTPS 请求体传输，服务端只存哈希并原子消费。
+	InstallCode string `json:"install_code"`
 }
 
 // RegisterResult 返回给终端的注册结果：明文 Token 仅此一次出现。
@@ -68,23 +89,38 @@ type BatchResult struct {
 type Service struct {
 	eventStore   *store.Store
 	alertService *alert.Service
-	autoRegister bool // 对应 A3_ALLOW_AUTO_REGISTER
 }
 
 // NewService 构建接入服务。
-func NewService(eventStore *store.Store, alertService *alert.Service, autoRegister bool) *Service {
-	return &Service{eventStore: eventStore, alertService: alertService, autoRegister: autoRegister}
+func NewService(eventStore *store.Store, alertService *alert.Service) *Service {
+	return &Service{eventStore: eventStore, alertService: alertService}
 }
 
-// RegisterDevice 注册设备：新指纹创建；同指纹则要求携带既有 Token 凭证证明身份后
-// 轮换（claimedToken 为空或与库中不符 → ErrCredentialRequired / ErrCredentialMismatch）。
-// 凭证语义：指纹不再足以换发他人 Token，杜绝无凭证顶替。
-func (service *Service) RegisterDevice(ctx context.Context, registerInput RegisterInput, claimedToken string) (*RegisterResult, error) {
-	if !service.autoRegister {
-		return nil, ErrAutoRegisterDisabled
+// RegisterDevice 注册设备——统一门禁为管理员下发的一次性安装凭据（installCode）：
+//  1. 字段格式/长度校验（含安装代码格式闸门）；
+//  2. 原子消费安装凭据（store 同事务落 success/rejected_* 使用记录，防双花）；
+//  3. 指纹注册：新指纹创建并下发新 Token；同指纹则要求携带既有 Token 凭证证明
+//     身份后**复用身份、不轮换 Token**（created=false，终端保留既有 Token）；
+//     仅剩 revoked 历史行时直接新建（管理员吊销后的恢复路径）。
+//
+// 凭证语义：指纹 + 安装代码共同构成注册权限——无管理员代码无法注册/顶替，
+// 有代码也不能顶替既有 active 设备（须有旧 Token 才可复用其身份）。
+// claimedToken 为空串表示「无既有 Token」（新指纹注册场景）。
+func (service *Service) RegisterDevice(ctx context.Context,
+	registerInput RegisterInput, claimedToken string, clientIP string) (*RegisterResult, error) {
+
+	if err := validateRegisterInput(registerInput); err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(registerInput.MachineFingerprint) == "" {
-		return nil, fmt.Errorf("%w: machine_fingerprint 不能为空", ErrEventInvalid)
+
+	// 原子消费安装凭据：消费同事务落一条使用记录（拒绝原因也留痕）。
+	useID, outcome, consumeErr := service.eventStore.ConsumeInstallCredential(
+		ctx, auth.HashToken(registerInput.InstallCode), clientIP)
+	if consumeErr != nil {
+		return nil, consumeErr
+	}
+	if outcome != store.CredentialOutcomeSuccess {
+		return nil, rejectOutcomeErr(outcome)
 	}
 
 	newToken, tokenErr := auth.GenerateDeviceToken()
@@ -105,11 +141,61 @@ func (service *Service) RegisterDevice(ctx context.Context, registerInput Regist
 		claimedTokenHash = auth.HashToken(claimedToken)
 	}
 
-	deviceID, _, registerErr := service.eventStore.RegisterDeviceAtomic(ctx, device, claimedTokenHash)
+	deviceID, created, registerErr := service.eventStore.RegisterDeviceAtomic(ctx, device, claimedTokenHash)
 	if registerErr != nil {
 		return nil, registerErr
 	}
-	return &RegisterResult{DeviceID: deviceID, Token: newToken}, nil
+	// 回填凭据使用记录的设备归属（消费时设备尚未生成）。
+	if patchErr := service.eventStore.SetCredentialUseDeviceID(ctx, useID, deviceID); patchErr != nil {
+		return nil, patchErr
+	}
+
+	result := &RegisterResult{DeviceID: deviceID}
+	if created {
+		result.Token = newToken // 仅新注册下发明文 Token；复用身份时终端保留既有 Token
+	}
+	return result, nil
+}
+
+// validateRegisterInput 注册字段格式/长度校验；违规返回 ErrEventInvalid 包装错误。
+func validateRegisterInput(input RegisterInput) error {
+	fingerprint := strings.TrimSpace(input.MachineFingerprint)
+	if fingerprint == "" || utf8.RuneCountInString(fingerprint) > maxFingerprintLen {
+		return fmt.Errorf("%w: machine_fingerprint 缺失或超长", ErrEventInvalid)
+	}
+	if utf8.RuneCountInString(input.Hostname) > registerFieldMaxLen {
+		return fmt.Errorf("%w: hostname 超长", ErrEventInvalid)
+	}
+	if utf8.RuneCountInString(input.OS) > registerFieldMaxLen {
+		return fmt.Errorf("%w: os 超长", ErrEventInvalid)
+	}
+	if utf8.RuneCountInString(input.Arch) > registerArchMaxLen {
+		return fmt.Errorf("%w: arch 超长", ErrEventInvalid)
+	}
+	code := strings.TrimSpace(input.InstallCode)
+	if code == "" {
+		return fmt.Errorf("%w: 缺少安装凭据", ErrCredentialInvalid)
+	}
+	if utf8.RuneCountInString(code) > maxInstallCodeLen || !installCodePattern.MatchString(code) {
+		return fmt.Errorf("%w: 安装凭据格式不合法", ErrCredentialInvalid)
+	}
+	return nil
+}
+
+// rejectOutcomeErr 把 store 的凭据拒绝分类映射为业务哨兵错误。
+func rejectOutcomeErr(outcome string) error {
+	switch outcome {
+	case store.CredentialOutcomeRejectedInvalid:
+		return ErrCredentialUnknown
+	case store.CredentialOutcomeRejectedExpired:
+		return ErrCredentialExpired
+	case store.CredentialOutcomeRejectedDisabled:
+		return ErrCredentialDisabled
+	case store.CredentialOutcomeRejectedUsed:
+		return ErrCredentialUsedUp
+	default:
+		return ErrCredentialUnknown
+	}
 }
 
 // SubmitEvents 处理一批事件：逐条校验→心跳→幂等落库→会话聚合→投递异步风险扫描。

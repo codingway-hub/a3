@@ -20,21 +20,28 @@ import (
 	"github.com/codingway-hub/a3/pkg/schema"
 )
 
-// newHandlerRouter 组装含设备侧路由的测试引擎。
-func newHandlerRouter(t *testing.T) (*gin.Engine, *store.Store, *alert.Service) {
+// newHandlerRouter 组装含设备侧路由的测试引擎，并预置一条高用量安装凭据。
+func newHandlerRouter(t *testing.T) (*gin.Engine, *store.Store, *alert.Service, string) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	testPool := servetest.NewTestPool(t)
-	servetest.ResetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices")
+	servetest.ResetTablesForTest(t, testPool,
+		"alerts", "sessions", "events", "devices", "install_credentials", "install_credential_uses", "audit_log")
 
 	eventStore := store.NewStore(testPool)
 	alertService := alert.NewService(eventStore)
 	require.NoError(t, alertService.ReloadRules(context.Background()))
 
-	ingestService := NewService(eventStore, alertService, true)
+	installCode, codeErr := auth.GenerateInstallCode()
+	require.NoError(t, codeErr)
+	_, createErr := eventStore.CreateInstallCredentialWithAudit(context.Background(),
+		auth.HashToken(installCode), "device", time.Now().Add(time.Hour), 1000, "handler-tester", "handler-tester", nil)
+	require.NoError(t, createErr)
+
+	ingestService := NewService(eventStore, alertService)
 	engine := gin.New()
 	NewHandler(ingestService).RegisterRoutes(engine)
-	return engine, eventStore, alertService
+	return engine, eventStore, alertService, installCode
 }
 
 func postJSON(engine *gin.Engine, target string, body string, bearerToken string) *httptest.ResponseRecorder {
@@ -49,11 +56,11 @@ func postJSON(engine *gin.Engine, target string, body string, bearerToken string
 }
 
 func TestFullChainRegisterSubmitReplay(t *testing.T) {
-	engine, eventStore, _ := newHandlerRouter(t)
+	engine, eventStore, _, installCode := newHandlerRouter(t)
 
-	// ① 注册设备
+	// ① 注册设备（凭据门禁：携带安装代码）
 	registered := postJSON(engine, "/api/v1/devices/register",
-		`{"hostname":"macbook","os":"darwin","arch":"arm64","machine_fingerprint":"fp-e2e-1"}`, "")
+		`{"hostname":"macbook","os":"darwin","arch":"arm64","machine_fingerprint":"fp-e2e-1","install_code":"`+installCode+`"}`, "")
 	require.Equal(t, http.StatusOK, registered.Code, registered.Body.String())
 	var registerResponse struct {
 		DeviceID string `json:"device_id"`
@@ -117,7 +124,7 @@ func TestFullChainRegisterSubmitReplay(t *testing.T) {
 }
 
 func TestDeviceRulesEndpointWaterfall(t *testing.T) {
-	engine, eventStore, _ := newHandlerRouter(t)
+	engine, eventStore, _, installCode := newHandlerRouter(t)
 	ctx := context.Background()
 	// rules 表承载迁移种子、不参与表重置；用例内启停内置规则后必须还原，
 	// 否则共享库状态泄漏到其他包的规则断言
@@ -140,7 +147,7 @@ func TestDeviceRulesEndpointWaterfall(t *testing.T) {
 
 	// ② 注册设备换 Token 后可拉取：14 条内置规则 + sha256 摘要
 	registered := postJSON(engine, "/api/v1/devices/register",
-		`{"hostname":"rules-node","os":"darwin","arch":"arm64","machine_fingerprint":"fp-rules-1"}`, "")
+		`{"hostname":"rules-node","os":"darwin","arch":"arm64","machine_fingerprint":"fp-rules-1","install_code":"`+installCode+`"}`, "")
 	require.Equal(t, http.StatusOK, registered.Code, registered.Body.String())
 	var registerResponse struct {
 		Token string `json:"token"`

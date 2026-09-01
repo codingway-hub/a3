@@ -50,12 +50,11 @@ func (api *Router) HandleAgentDownload(routerCtx *gin.Context) {
 	routerCtx.File(diskPath)
 }
 
-// HandleSetupInfo 指南页信息：注册开关与产物就绪状态（仅两个布尔 + 公开地址，无敏感数据）。
+// HandleSetupInfo 指南页信息：产物就绪状态与公开地址（无敏感数据）。
 func (api *Router) HandleSetupInfo(routerCtx *gin.Context) {
 	routerCtx.JSON(http.StatusOK, gin.H{
-		"allow_auto_register": api.allowAutoRegister,
-		"agent_dist_ready":    api.agentDist != "",
-		"public_url":          api.publicURL,
+		"agent_dist_ready": api.agentDist != "",
+		"public_url":       api.publicURL,
 	})
 }
 

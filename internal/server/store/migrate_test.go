@@ -33,6 +33,8 @@ var expectedTableNames = []string{
 	"audit_log",
 	"devices",
 	"events",
+	"install_credential_uses",
+	"install_credentials",
 	"rules",
 	"schema_migrations",
 	"sessions",
@@ -237,7 +239,8 @@ func newIntegrationTestConnection(t *testing.T) *pgx.Conn {
 func resetDatabaseSchema(t *testing.T, testConn *pgx.Conn) {
 	t.Helper()
 	_, dropErr := testConn.Exec(context.Background(),
-		`DROP TABLE IF EXISTS admin_users, rules, alerts, audit_log, events, sessions, devices, schema_migrations CASCADE`)
+		`DROP TABLE IF EXISTS admin_users, install_credentials, install_credential_uses, rules, alerts, audit_log,
+		 events, sessions, devices, schema_migrations CASCADE`)
 	if dropErr != nil {
 		t.Fatalf("重置数据库 Schema 失败: %v", dropErr)
 	}

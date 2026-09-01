@@ -77,12 +77,11 @@ func main() {
 
 	// HTTP 装配
 	router := api.NewRouter(eventStore, alertService, api.RouterConfig{
-		JWTSecret:         serverConfig.JWTSecret,
-		WebDist:           serverConfig.WebDist,
-		AgentDist:         serverConfig.AgentDist,
-		AllowAutoRegister: serverConfig.AllowAutoRegister,
-		PublicURL:         serverConfig.PublicURL,
-		DeviceAPI:         ingest.NewHandler(ingest.NewService(eventStore, alertService, serverConfig.AllowAutoRegister)),
+		JWTSecret: serverConfig.JWTSecret,
+		WebDist:   serverConfig.WebDist,
+		AgentDist: serverConfig.AgentDist,
+		PublicURL: serverConfig.PublicURL,
+		DeviceAPI: ingest.NewHandler(ingest.NewService(eventStore, alertService)),
 	})
 	engine := router.Setup()
 
@@ -96,7 +95,7 @@ func main() {
 	go func() {
 		tlsEnabled := serverConfig.TLSKeyPath != ""
 		logger.Info("a3 服务端已启动", "addr", serverConfig.Addr,
-			"tls", tlsEnabled, "auto_register", serverConfig.AllowAutoRegister,
+			"tls", tlsEnabled,
 			"web_dist", serverConfig.WebDist != "")
 		serverErrorCh <- buildServeCall(httpServer, serverConfig.TLSCertPath, serverConfig.TLSKeyPath)()
 	}()

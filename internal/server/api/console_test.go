@@ -42,7 +42,8 @@ func newFixture(t *testing.T) *fixture {
 	gin.SetMode(gin.TestMode)
 
 	testPool := servetest.NewTestPool(t)
-	servetest.ResetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices", "admin_users", "audit_log")
+	servetest.ResetTablesForTest(t, testPool, "alerts", "sessions", "events", "devices", "admin_users",
+		"audit_log", "install_credentials", "install_credential_uses")
 	eventStore := store.NewStore(testPool)
 	alertService := alert.NewService(eventStore)
 	require.NoError(t, alertService.ReloadRules(context.Background()))

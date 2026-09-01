@@ -1,7 +1,8 @@
 #!/bin/sh
 # a3 服务端一键安装（本机 Docker Compose 部署）。
 # 用法: ./deploy/install-server.sh http://aa.bb.com:12345
-# 完成后打开 http://aa.bb.com:12345/setup-guide（接入指南页），把该页链接发给采集端用户即可。
+# 完成后打开 http://aa.bb.com:12345/setup-guide（接入指南页），把该页链接发给采集端用户即可；
+# 新设备登记需凭据：先在控制台「安装凭据」页生成一条一次性凭据，随链接一并发给用户。
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -101,10 +102,8 @@ case "$PUBLIC_HOST" in
     ;;
 esac
 
-# —— 开放自助注册：否则用户照指南页执行安装命令会撞 403 ——
-WAS_AUTO_REGISTER_ON="no"
-grep -q '^A3_ALLOW_AUTO_REGISTER=true' "$ENV_FILE" && WAS_AUTO_REGISTER_ON="yes"
-upsert_env "A3_ALLOW_AUTO_REGISTER" "true"
+# —— 设备登记门禁：注册须持有管理员下发的安装凭据，无服务端环境变量 ——
+echo "==> 启动后请到控制台「安装凭据」页生成凭据，下发给待接入用户（新设备凭据门禁）。"
 
 # —— 构建并拉起 postgres + server ——
 echo "==> 构建镜像并启动（首次构建需数分钟）…"
@@ -124,6 +123,5 @@ if [ "$GENERATED_JWT_NOTE" = "yes" ]; then
   echo "   JWT 签名密钥已随机生成并写入 .env（重启后控制台登录态保持有效）"
 fi
 echo
-echo "⚠️  已开放自助注册（A3_ALLOW_AUTO_REGISTER=true）：能连到 $PUBLIC_URL 的设备"
-echo "    均可自行注册接入。收齐设备后建议关闭：deploy/.env 中改为 false，再执行"
-echo "    docker compose -f deploy/docker-compose.yml up -d"
+echo "⚠️  设备登记需凭据门禁：请打开控制台「安装凭据」页，为每位待接入用户生成一条"
+echo "    限时限次的一次性凭据私下发送；没有凭据的用户无法完成登记。"

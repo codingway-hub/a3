@@ -122,6 +122,6 @@ func TestSetupInfoIsPublic(t *testing.T) {
 	engine.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusOK, recorder.Code, "setup-info 必须免登录可访问（用户无控制台账号）")
-	assert.JSONEq(t, `{"allow_auto_register":false,"agent_dist_ready":false,"public_url":"https://a3.example.com"}`,
+	assert.JSONEq(t, `{"agent_dist_ready":false,"public_url":"https://a3.example.com"}`,
 		recorder.Body.String())
 }

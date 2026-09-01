@@ -64,7 +64,8 @@ func resolveDeviceIdentity(ctx context.Context, agentConfig core.Config, logger 
 		agentConfig.ServerURL)
 }
 
-// registerCommand 显式注册子命令（分布式部署模式）。
+// registerCommand 显式注册子命令（薄壳）：解析 flag 后委托 registerDeviceCore。
+// 凭据读取、身份复用等安全语义见 registerDeviceCore。
 func registerCommand(flagArguments []string) int {
 	registerFlags := flag.NewFlagSet("register", flag.ContinueOnError)
 	serverURL := registerFlags.String("server", os.Getenv("A3_SERVER_URL"), "服务端地址")
@@ -84,48 +85,118 @@ func registerCommand(flagArguments []string) int {
 		return 1
 	}
 	stateDir := filepath.Join(homeDir, ".a3")
+	return registerDeviceCore(stateDir, *serverURL, *insecureTLS,
+		os.Stdin, os.Stdout, os.Stderr)
+}
 
-	uploaderClient, uploaderErr := transport.NewUploader(*serverURL, "", agentVersion, *insecureTLS, nil)
+// registerDeviceCore 注册核心流程：
+//  1. 设备身份已存在（device-token + device-id）→ 复用原身份，跳过注册；
+//  2. 否则从 stdin 读取管理员一次性安装凭据，携指纹注册→领取新 Token 落盘。
+//
+// 凭据仅经 stdin 交互/管道读取，绝不进入命令行参数/URL/脚本内容/日志；
+// 明文不落盘，读取后仅存于内存请求体。返回进程退出码。
+func registerDeviceCore(stateDir string, serverURL string, insecureTLS bool,
+	stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+
+	// 重装/重复执行：设备身份已存在即复用，无需再注册。
+	// 服务端对重复安装复用同一设备身份、不轮换 Token；本机保留原 Token 继续上报即可。
+	if readStoredDeviceToken(stateDir) != "" && readStoredDeviceID(stateDir) != "" {
+		fmt.Fprintf(stdout, "已在册：设备身份已存在（%s），无需重新注册。如需换发 Token，请由管理员吊销后再装。\n",
+			storedFilePath(stateDir, deviceTokenFileName))
+		return 0
+	}
+
+	// 管理员一次性安装凭据：仅经 stdin 交互读取（交互终端提示或安装脚本管道喂入），
+	// 明文不落盘、不进参数、不打日志——读取完成即仅存于内存请求体。
+	installCode, promptErr := promptInstallCode(stdin, stderr)
+	if promptErr != nil {
+		fmt.Fprintf(stderr, "注册失败: %v\n", promptErr)
+		return 1
+	}
+
+	uploaderClient, uploaderErr := transport.NewUploader(serverURL, "", agentVersion, insecureTLS, nil)
 	if uploaderErr != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", uploaderErr)
+		fmt.Fprintf(stderr, "%v\n", uploaderErr)
 		return 1
 	}
 	ctxWithTimeout, cancelTimeout := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelTimeout()
 
 	fingerprint := buildMachineFingerprint()
-	// 重复注册必须携带既有 Token 作为凭证证明（同指纹只认凭证、不认指纹换发）
+	// 重复注册必须携带既有 Token 作为凭证证明（同指纹只认凭证、不认指纹换发）；
+	// 完整身份存在时上方已跳过注册，此处仅覆盖残缺身份（有 Token 无 device-id 等）场景。
 	credentialToken := readStoredDeviceToken(stateDir)
 	registrationResult, registerErr := uploaderClient.RegisterDevice(ctxWithTimeout, transport.DeviceInfo{
 		Hostname: shortHostname(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		MachineFingerprint: fingerprint,
+		InstallCode:        installCode,
 	}, credentialToken)
 	if registerErr != nil {
 		if credentialToken == "" {
 			var rejectedErr *transport.NonRetryableError
 			if errors.As(registerErr, &rejectedErr) && rejectedErr.StatusCode == http.StatusConflict {
-				fmt.Fprintf(os.Stderr,
-					"注册失败：本机指纹已登记且需携带既有 Token 换发。\n"+
-						"本机未找到 Token（%s 不存在或已清空）。\n"+
+				fmt.Fprintf(stderr,
+					"注册失败：本机指纹已登记在其他设备身份。\n"+
+						"本机未找到可用的既有 Token（%s 不存在或已清空）。\n"+
 						"请恢复该文件后重试，或联系管理员在控制台吊销该设备后重新注册。\n",
 					storedFilePath(stateDir, deviceTokenFileName))
 				return 1
 			}
 		}
-		fmt.Fprintf(os.Stderr, "注册失败: %v\n", registerErr)
+		fmt.Fprintf(stderr, "注册失败: %v\n", registerErr)
 		return 1
 	}
 	if storeErr := storeDeviceIdentity(stateDir, registrationResult.Token, registrationResult.DeviceID); storeErr != nil {
-		fmt.Fprintf(os.Stderr, "保存身份失败: %v\n", storeErr)
+		fmt.Fprintf(stderr, "保存身份失败: %v\n", storeErr)
 		return 1
 	}
-	if persistErr := persistServerURL(stateDir, *serverURL); persistErr != nil {
-		fmt.Fprintf(os.Stderr, "警告：服务端地址写盘失败（run/常驻服务时需设 A3_SERVER_URL）: %v\n", persistErr)
+	if persistErr := persistServerURL(stateDir, serverURL); persistErr != nil {
+		fmt.Fprintf(stderr, "警告：服务端地址写盘失败（run/常驻服务时需设 A3_SERVER_URL）: %v\n", persistErr)
 	}
-	fmt.Printf("✅ 注册成功\ndevice_id = %s\ntoken     = %s（已保存至 %s）\n",
+	fmt.Fprintf(stdout, "✅ 注册成功\ndevice_id = %s\ntoken     = %s（已保存至 %s）\n",
 		registrationResult.DeviceID, registrationResult.Token,
 		filepath.Join(stateDir, deviceTokenFileName))
 	return 0
+}
+
+// promptInstallCode 从 stdin 读取管理员下发的一次性安装凭据：
+//   - 交互终端（stdin 为 TTY）时在 stderr 给出提示后整行读取并回车提交；
+//   - 非交互（安装脚本管道喂入）时整行读取，供脚本把凭据经 stdin 传给本命令。
+//
+// 凭据绝不进入命令行参数、URL、脚本内容或日志；读取后仅存于内存用于请求体。
+// 返回错误时调用方终止注册（不可静默跳过——缺凭据注册必然被服务端拒绝）。
+func promptInstallCode(stdin io.Reader, stderr io.Writer) (string, error) {
+	fmt.Fprintln(stderr, "请输入管理员下发的一次性安装凭据，回车提交")
+	fmt.Fprintln(stderr, "（凭据仅经 stdin 提交，绝不写入命令行、URL 或日志）")
+	rawBytes, readErr := readLineNoEcho(stdin)
+	if readErr != nil {
+		return "", fmt.Errorf("读取安装凭据失败: %w", readErr)
+	}
+	code := strings.TrimSpace(string(rawBytes))
+	if code == "" {
+		return "", errors.New("安装凭据不能为空")
+	}
+	fmt.Fprintln(stderr)
+	return code, nil
+}
+
+// readLineNoEcho 读取一行的原始字节直至换行（EOF 且已有内容时也返回该行）。
+func readLineNoEcho(stdin io.Reader) ([]byte, error) {
+	var lineBuilder strings.Builder
+	oneByte := make([]byte, 1)
+	for {
+		_, readErr := stdin.Read(oneByte)
+		if readErr != nil {
+			if readErr == io.EOF && lineBuilder.Len() > 0 {
+				return []byte(lineBuilder.String()), nil
+			}
+			return nil, readErr
+		}
+		if oneByte[0] == '\n' {
+			return []byte(lineBuilder.String()), nil
+		}
+		lineBuilder.WriteByte(oneByte[0])
+	}
 }
 
 // hookCommand PreToolUse Hook 入口：读 stdin 裁决；alert 风险事件直接入断网缓存队列。

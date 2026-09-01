@@ -18,12 +18,11 @@
         class="guide-alert"
       />
       <el-alert
-        v-if="setupInfo && setupInfo.agent_dist_ready && !setupInfo.allow_auto_register"
-        type="warning"
+        type="info"
         :closable="false"
         show-icon
-        title="自动注册当前处于关闭状态，用户执行安装命令会提示无权限"
-        description="请管理员在服务端 .env 中设置 A3_ALLOW_AUTO_REGISTER=true 后重启，或改用控制台预注册设备。"
+        title="登记需要管理员下发的安装凭据"
+        description="安装前请向管理员索取一条「安装凭据」（在控制台「安装凭据」页生成）。凭据仅经终端输入提交，绝不出现于命令行或日志；执行安装命令后按提示粘贴即可。"
         class="guide-alert"
       />
 
@@ -39,7 +38,7 @@
       <p class="guide-note">支持 macOS 与 Linux；脚本会自动识别平台并完成以下事项：</p>
       <ul class="guide-steps">
         <li>下载采集器并安装到 <code>~/.a3/bin/a3-agent</code></li>
-        <li>注册设备（重复执行自动幂等）</li>
+        <li>注册设备（凭管理员下发的安装凭据登记；同一台机器重装自动复用原身份，无需再要凭据）</li>
         <li>安装 Claude Code 前置 Hook（高危命令拦截上报）</li>
         <li>安装常驻服务：开机自启、崩溃自动拉起</li>
       </ul>
