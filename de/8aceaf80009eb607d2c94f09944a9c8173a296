@@ -1,0 +1,41 @@
+internal/server/config/config_test.go
+  s_8301e3490dd7cb::t_283b215b411cb9 117-118,131-211
+  s_8301e3490dd7cb::t_4875754b27b732 14-15,24
+  s_8301e3490dd7cb::t_185ecc5e46c4ac 4-6,9-11
+internal/server/config/config.go
+  s_8301e3490dd7cb::t_9a775fa6980ab4 7,11,15-22,37
+  s_8301e3490dd7cb::t_3e9af20853c3d4 25-36,38-40
+  s_8301e3490dd7cb::t_09a0279fc990a4 87-90,92,94-101,103-105,107-109,113-176
+  s_8301e3490dd7cb::t_0b00e8b09b9728 49
+  s_8301e3490dd7cb::t_a46488b0536fb2 177
+Dockerfile.server
+  s_8301e3490dd7cb::t_71e2249b5d2e32 31-33,37
+cmd/server/main.go
+  s_8301e3490dd7cb::t_8fcd1afad93d46 36-37
+  s_8301e3490dd7cb::t_77090fd836659a 163-165
+  s_8301e3490dd7cb::t_1de5858349a44e 7
+deploy/.env.example
+  s_8301e3490dd7cb::t_ea427a893575e3 7-8,12-17
+deploy/docker-compose.yml
+  s_8301e3490dd7cb::t_6c3ebc92aed5a1 64
+  s_8301e3490dd7cb::t_7c356746af92d1 52-54
+  s_8301e3490dd7cb::t_de89850738f5fd 36-38
+README.md
+  s_8301e3490dd7cb::t_cb4a837a90284f 112-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "de8aceaf80009eb607d2c94f09944a9c8173a296",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
