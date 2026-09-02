@@ -170,7 +170,8 @@ func runDoctor(homeDir string, agentConfig core.Config, writer io.Writer, runExt
 		report.warn(doctorServiceLabel, "%s 需手动服务化（install-service 当前不支持）", runtime.GOOS)
 	}
 
-	// 8. 服务端连通性：3s 超时探测；失败仅警告（离线/自签名/地址错误时采集以缓存兜底）
+	// 8. 服务端连通性：3s 超时探测 /healthz（存活 + DB 就绪，与 webDist 无关）；
+	//    失败仅警告（离线/自签名/地址错误时采集以缓存兜底）
 	if !runExternal {
 		report.info("跳过服务端连通性探测（测试/非交互模式）")
 	} else if serverURL == "" {
@@ -182,7 +183,7 @@ func runDoctor(homeDir string, agentConfig core.Config, writer io.Writer, runExt
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // 显式 A3_INSECURE_SKIP_TLS_VERIFY 场景
 			}
 		}
-		probeResponse, probeErr := httpClient.Get(serverURL + "/setup-guide")
+		probeResponse, probeErr := httpClient.Get(serverURL + "/healthz")
 		if probeErr != nil {
 			report.warn("连通性", "无法连通服务端 %s: %v（断网/自签名/地址错误时属正常，断网续传兜底）", serverURL, probeErr)
 		} else {

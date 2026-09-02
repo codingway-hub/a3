@@ -23,6 +23,9 @@ import (
 	"github.com/codingway-hub/a3/internal/server/store"
 )
 
+// serverVersion 当前服务端版本（/healthz 与概览「系统状态」展示）。
+const serverVersion = "0.1.0"
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -80,6 +83,7 @@ func main() {
 		AgentDist: serverConfig.AgentDist,
 		PublicURL: serverConfig.PublicURL,
 		DeviceAPI: ingest.NewHandler(ingest.NewService(eventStore, alertService)),
+		Version:   serverVersion,
 	})
 	engine := router.Setup()
 

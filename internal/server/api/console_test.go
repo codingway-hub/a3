@@ -35,6 +35,7 @@ const (
 	fixtureAdminUser     = "admin"
 	fixtureAdminPassword = "unit-test-password"
 	fixtureJWTSecret     = "unit-jwt-secret"
+	fixtureVersion       = "test"
 )
 
 func newFixture(t *testing.T) *fixture {
@@ -56,6 +57,7 @@ func newFixture(t *testing.T) *fixture {
 
 	apiRouter := NewRouter(eventStore, alertService, RouterConfig{
 		JWTSecret: fixtureJWTSecret,
+		Version:   fixtureVersion,
 	})
 	return &fixture{
 		engine:       apiRouter.Setup(),
@@ -171,6 +173,16 @@ func TestStatsOverviewEndpoint(t *testing.T) {
 	assert.Equal(t, float64(1), overview["open_alert_count"])
 	assert.GreaterOrEqual(t, overview["today_event_count"], float64(0))
 	assert.Equal(t, float64(1), overview["active_device_count"], "刚种入的设备应判定在线")
+
+	// 服务端系统状态字段（版本/运行时长/服务器时间）
+	assert.Equal(t, "test", overview["server_version"])
+	assert.GreaterOrEqual(t, overview["server_uptime_seconds"], float64(0))
+	serverTime, hasServerTime := overview["server_time"].(string)
+	assert.True(t, hasServerTime)
+	if hasServerTime {
+		_, parseErr := time.Parse(time.RFC3339, serverTime)
+		assert.NoError(t, parseErr)
+	}
 }
 
 func TestSessionsEndpoints(t *testing.T) {

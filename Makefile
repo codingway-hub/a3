@@ -14,9 +14,10 @@ build-agent:
 build-server:
 	$(GO) build -o bin/a3-server ./cmd/server
 
-# 首次安装前端依赖（生成 web/package-lock.json）。
+# 安装前端依赖：以 web/package-lock.json 为准（npm ci 严格锁版本）。
+# 锁漂移会报错——需要升级依赖时用 `cd web && npm install <pkg>` 显式更新锁并提交。
 web-install:
-	cd web && npm install
+	cd web && npm ci
 
 # 构建前端产物到 web/dist（服务端经 A3_WEB_DIST=./web/dist 托管）。
 build-web:

@@ -1,0 +1,63 @@
+# a3 持续集成：服务端集成测试（真 Postgres）+ 前端锁依赖构建。
+# 测试库需真实可达——不能达即失败，不做静默跳过（servetest 在 Acquire 处硬失败）。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go integration tests (real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: a3
+          POSTGRES_PASSWORD: a3
+          POSTGRES_DB: a3_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U a3 -d a3_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Vet
+        run: go vet ./...
+      # -p 1 串行：各包共享同一 a3_test 库并互作 TRUNCATE 清场；
+      # -count=1 禁用测试结果缓存，避免复读旧绿屏掩盖库配置错误。
+      - name: Integration tests
+        env:
+          TEST_DATABASE_URL: postgres://a3:a3@127.0.0.1:5432/a3_test?sslmode=disable
+        run: go test -p 1 -count=1 ./...
+
+  web:
+    name: Web build (npm ci)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # npm ci 以 package-lock.json 为准：锁漂移（package.json 与锁不一致）直接报错，
+      # 前端依赖权威性由 CI 兜底。
+      - name: Install
+        run: cd web && npm ci
+      - name: Build
+        run: cd web && npm run build

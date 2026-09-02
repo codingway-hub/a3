@@ -53,7 +53,8 @@ services:
       # JWT 密钥等持久状态跨容器重启保留（.env 未填 A3_JWT_SECRET 时登录态不掉）
       - server-state:/app/state
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+      # /healthz：DB 可达才返回 200，503 即标记不健康（busybox wget 对 4xx/5xx 非零退出）
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/healthz || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 6

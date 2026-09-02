@@ -40,11 +40,14 @@ func (api *Router) HandleStatsOverview(routerCtx *gin.Context) {
 	}
 
 	routerCtx.JSON(http.StatusOK, gin.H{
-		"today_event_count":   todayEventCount,
-		"active_device_count": activeDeviceCount,
-		"open_alert_count":    openAlertCount,
-		"total_sessions":      totalSessions,
-		"risky_sessions":      riskySessions,
+		"today_event_count":     todayEventCount,
+		"active_device_count":   activeDeviceCount,
+		"open_alert_count":      openAlertCount,
+		"total_sessions":        totalSessions,
+		"risky_sessions":        riskySessions,
+		"server_version":        api.version,
+		"server_uptime_seconds": int64(time.Since(api.startedAt).Seconds()),
+		"server_time":           nowTime.Format(time.RFC3339),
 	})
 }
 

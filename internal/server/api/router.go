@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -29,6 +30,8 @@ type Router struct {
 	agentDist       string            // 采集器发布产物目录；为空则不提供下载
 	publicURL       string            // 对外公开地址（配置即权威，反代场景）；空则按请求 Host 推导
 	agentAssetPaths map[string]string // 白名单产物名 → 磁盘路径，启动期建立，绝不拼接用户输入
+	version         string            // 服务端版本（healthz/概览展示）
+	startedAt       time.Time         // 启动时刻（运行时长计算基准）
 }
 
 // RouterConfig 是装配参数。
@@ -38,6 +41,7 @@ type RouterConfig struct {
 	AgentDist string
 	PublicURL string
 	DeviceAPI *ingest.Handler
+	Version   string
 }
 
 // NewRouter 构建装配器。
@@ -57,6 +61,8 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		agentDist:       routerConfig.AgentDist,
 		publicURL:       routerConfig.PublicURL,
 		agentAssetPaths: agentAssetPaths,
+		version:         routerConfig.Version,
+		startedAt:       time.Now(),
 	}
 }
 
@@ -78,6 +84,9 @@ func (api *Router) Setup() *gin.Engine {
 	// 采集器一键安装托管：install.sh 按请求地址注入服务端地址，产物下载走白名单映射（公开，先例 register）
 	engine.GET("/install.sh", api.HandleInstallScript)
 	engine.GET("/download/agent/:assetName", api.HandleAgentDownload)
+
+	// 存活/就绪探测：DB 可达性判定；基础设施探针与采集器 doctor 免鉴权（先例 install.sh）
+	engine.GET("/healthz", api.HandleHealthz)
 
 	// 控制台 API：login 公开，其余统一 JWT 保护；写操作按角色二次收敛
 	consoleGroup := engine.Group("/api/v1")

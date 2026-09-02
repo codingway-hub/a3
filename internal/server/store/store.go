@@ -48,6 +48,11 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+// Ping 探测连接池可用性（存活/就绪探针用）。
+func (store *Store) Ping(ctx context.Context) error {
+	return store.pool.Ping(ctx)
+}
+
 // NewPool 建立 PostgreSQL 连接池。
 func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)

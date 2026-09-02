@@ -356,5 +356,5 @@ make smoke-agent A3_SMOKE_BASE=... A3_ADMIN_PASSWORD=***   # 采集器端到端�
 make offline-drill A3_SMOKE_BASE=... A3_ADMIN_PASSWORD=*** # 断网续传演练：落缓存→恢复后自动补报
 ```
 
-本地起前端开发服务：`cd web && npm install && npm run dev`（Vite 默认 :5173，
+本地起前端开发服务：`cd web && npm ci && npm run dev`（依赖以 `web/package-lock.json` 为准；Vite 默认 :5173，
 接口经 `web/vite.config.js` 代理到本机服务端）。
