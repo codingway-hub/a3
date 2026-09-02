@@ -1,0 +1,54 @@
+internal/server/store/store.go
+  s_8301e3490dd7cb::t_5040223e69625d 51-55
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_878563babb03a4 33-34,44
+  s_8301e3490dd7cb::t_4779573ffd2b8c 9
+  s_8301e3490dd7cb::t_43193baf46906c 88-90
+  s_8301e3490dd7cb::t_299bdc45146987 64-65
+cmd/server/main.go
+  s_8301e3490dd7cb::t_04ae38bad15265 86
+  s_8301e3490dd7cb::t_4ca273ba742553 26-28
+internal/server/api/health.go
+  s_8301e3490dd7cb::t_af539be317035a 1-37
+internal/server/api/console_test.go
+  s_8301e3490dd7cb::t_a1c1d007f35bdf 38
+  s_8301e3490dd7cb::t_3b6f45a1e433dd 60
+  s_8301e3490dd7cb::t_70f330d24f3bd4 176-185
+internal/server/api/health_test.go
+  s_8301e3490dd7cb::t_4dbad899803b35 7
+  s_8301e3490dd7cb::t_4ceb0f711e7892 46,59,65-74
+  s_8301e3490dd7cb::t_b9060d6b97adc5 1-6,8-45,47-58,60-64,75
+Makefile
+  s_8301e3490dd7cb::t_a8c0786360801d 17-18,20
+deploy/docker-compose.yml
+  s_8301e3490dd7cb::t_f771e3e5dd7f2f 56-57
+cmd/agent/doctor.go
+  s_8301e3490dd7cb::t_0ce36d8f40f90e 173-174
+  s_8301e3490dd7cb::t_8c489939c4856b 186
+web/src/views/OverviewView.vue
+  s_8301e3490dd7cb::t_950bd7f1c83f55 41,44-47,56-58,61-63,71-76,81,84-105
+  s_8301e3490dd7cb::t_a1a4d78d17c1af 118-121
+  s_8301e3490dd7cb::t_21253b42b80707 31-36
+.github/workflows/ci.yml
+  s_8301e3490dd7cb::t_41a593216a4daf 1-63
+internal/server/api/console_stats.go
+  s_8301e3490dd7cb::t_62cbdd7d445cea 43-50
+README.md
+  s_8301e3490dd7cb::t_f677e79a9cb168 359
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "957e0a49c9f67237a98eb5c28c07e84de37f1168",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "stealth/ox-alpha"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
