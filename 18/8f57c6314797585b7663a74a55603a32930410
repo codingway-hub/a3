@@ -1,0 +1,44 @@
+cmd/agent/doctor_test.go
+  s_8301e3490dd7cb::t_5a2cf0430c0c96 1-92
+internal/server/api/installer/installer_test.go
+  s_8301e3490dd7cb::t_171d42666662df 50-51
+  s_8301e3490dd7cb::t_4b140fd97ce32c 34-49,52-53
+docs/INSTALL.md
+  s_8301e3490dd7cb::t_5781cea1003f95 69-70
+cmd/agent/main_test.go
+  s_8301e3490dd7cb::t_8544190a04c8fd 18-24
+README.md
+  s_8301e3490dd7cb::t_b2a9dad0695381 43
+web/src/views/SetupGuideView.vue
+  s_8301e3490dd7cb::t_c9a2fca71012f6 47,49
+cmd/agent/doctor.go
+  s_8301e3490dd7cb::t_6e0798a629c053 1-97,99,102-218
+  s_8301e3490dd7cb::t_4897e7202440de 98,100-101
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_908f1724906a04 31,34,57-58
+  s_8301e3490dd7cb::t_47d9c6dea54468 114-117
+  s_8301e3490dd7cb::t_33e4d0cad1e1dd 10
+internal/server/api/installer/install.sh.tmpl
+  s_8301e3490dd7cb::t_b4b82c5d73aa69 85,87-95
+  s_8301e3490dd7cb::t_f1d1ef14399ecf 78-83,96-104,106-107
+  s_8301e3490dd7cb::t_a0975ea1478995 130
+  s_8301e3490dd7cb::t_8bc7cf21445b41 16-18
+  s_8301e3490dd7cb::t_ae20b28a1dd2d3 65,67-77,86,105,108-114
+  s_8301e3490dd7cb::t_d30706e333dcc3 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "188f57c6314797585b7663a74a55603a32930410",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
