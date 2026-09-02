@@ -31,6 +31,26 @@ func TestRenderRejectsInvalidBaseURL(t *testing.T) {
 	}
 }
 
+func TestRenderCredentialDeliveryMarkers(t *testing.T) {
+	scriptText, renderErr := RenderInstallScript("http://aa.bb.com:12345")
+	require.NoError(t, renderErr)
+
+	// 身份探测：已登记短路「已在册」
+	assert.Contains(t, scriptText, "device-token")
+	assert.Contains(t, scriptText, "device-id")
+	assert.Contains(t, scriptText, "已在册")
+	// stdin 即终端：直接交给 register 交互读取
+	assert.Contains(t, scriptText, "[ -t 0 ]")
+	// 管道下凭据经 /dev/tty 读取、再经 stdin 喂给 register（凭据绝不进 argv）
+	assert.Contains(t, scriptText, "/dev/tty")
+	assert.Contains(t, scriptText, "stty -echo")
+	assert.Contains(t, scriptText, `printf '%s\n' "$INSTALL_CODE" | "$AGENT_BIN" register --server "$SERVER_URL"`)
+	// 无 tty 时给出可执行的指引
+	assert.Contains(t, scriptText, "curl $SERVER_URL/install.sh -o /tmp/a3-install.sh")
+	// 总结与验证命令统一指向 doctor（渲染产物为 shell 源码，引号以 \" 转义呈现）
+	assert.Contains(t, scriptText, `\"$AGENT_BIN\" doctor`)
+}
+
 func TestAssetNameForWhitelist(t *testing.T) {
 	assert.Equal(t, "a3-agent-darwin-amd64", AssetNameFor("darwin", "amd64"))
 	assert.Equal(t, "a3-agent-darwin-arm64", AssetNameFor("darwin", "arm64"))

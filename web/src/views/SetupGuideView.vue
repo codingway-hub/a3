@@ -44,9 +44,9 @@
       </ul>
 
       <h3>第三步：验证</h3>
-      <p class="guide-note">安装完成后在本页「设备管理」中应能看到新设备上线；采集端可用以下命令查看状态：</p>
+      <p class="guide-note">安装完成后在本页「设备管理」中应能看到新设备上线；采集端可用以下命令自检（全绿即装好，有问题会逐项指出）：</p>
       <div class="command-block static">
-        <code class="command-text">~/.a3/bin/a3-agent service-status</code>
+        <code class="command-text">~/.a3/bin/a3-agent doctor</code>
       </div>
 
       <h3>Windows 用户</h3>

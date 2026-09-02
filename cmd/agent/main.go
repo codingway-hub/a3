@@ -7,6 +7,7 @@
 //	install-hook     安装 PreToolUse Hook 到 ~/.claude/settings.json
 //	uninstall-hook   卸载上述 Hook
 //	register         显式注册设备并保存 Token（分布式部署模式）
+//	doctor           自检：逐项体检是否装好（无子命令时默认执行）
 //	version          打印版本
 package main
 
@@ -27,10 +28,10 @@ func main() {
 }
 
 // runAgentCLI 子命令分发；返回进程退出码。
+// 无子命令时默认执行自检（doctor）——装没装好、哪里缺，一眼看清。
 func runAgentCLI(arguments []string) int {
 	if len(arguments) == 0 {
-		printUsage(os.Stderr)
-		return 1
+		return doctorCommand(nil)
 	}
 	switch arguments[0] {
 	case "run":
@@ -53,6 +54,8 @@ func runAgentCLI(arguments []string) int {
 		return uninstallServiceCommand(arguments[1:])
 	case "service-status":
 		return serviceStatusCommand(arguments[1:])
+	case "doctor", "--doctor":
+		return doctorCommand(arguments[1:])
 	case "version":
 		fmt.Printf("a3-agent %s\n", agentVersion)
 		return 0
@@ -108,9 +111,10 @@ func loadAgentConfig(flagArguments []string) (core.Config, error) {
 func printUsage(output *os.File) {
 	usageText := `a3-agent %s — AI 编码行为审计终端采集器
 
-用法:
-  a3-agent run [flags]              常驻采集
-  a3-agent hook pretooluse [插件]   PreToolUse 前置 Hook（由宿主调用，缺省 claude-code）
+用法（无子命令时默认执行自检 doctor，未装好会以退出码 2 指出问题）:
+  a3-agent doctor                     自检：版本/配置/身份/缓存/监听/Hook/服务/连通性
+  a3-agent run [flags]                常驻采集
+  a3-agent hook pretooluse [插件]     PreToolUse 前置 Hook（由宿主调用，缺省 claude-code）
   a3-agent install-hook [[--plugin] 插件]...   安装前置 Hook 到宿主配置（缺省 claude-code）
   a3-agent uninstall-hook [[--plugin] 插件]... 卸载前置 Hook（无参清理全部 a3 项）
   a3-agent register --server URL    注册设备并保存 Token

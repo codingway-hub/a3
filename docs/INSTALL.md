@@ -66,7 +66,8 @@ curl http://aa.bb.com:12345/install.sh | sh
 ### 常用命令（都在 `~/.a3/bin/` 下）
 
 ```bash
-~/.a3/bin/a3-agent service-status     # 查看常驻服务状态
+~/.a3/bin/a3-agent doctor             # 自检：装没装好、缺什么一眼看清（全部通过才退出码 0，有问题为 2）
+~/.a3/bin/a3-agent service-status     # 只看常驻服务状态
 tail -f ~/.a3/agent.log               # 看采集器日志
 ~/.a3/bin/a3-agent uninstall-service  # 卸载常驻服务
 ~/.a3/bin/a3-agent uninstall-hook     # 卸载拦截 Hook

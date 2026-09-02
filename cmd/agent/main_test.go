@@ -15,7 +15,13 @@ func TestRunAgentCLISubcommandDispatch(t *testing.T) {
 	assert.Equal(t, 0, runAgentCLI([]string{"version"}))
 	assert.Equal(t, 0, runAgentCLI([]string{"help"}))
 
-	assert.Equal(t, 1, runAgentCLI(nil), "无子命令应报用法并失败")
+	// 无子命令默认执行自检（doctor）：返回 0（通过/含警告）或 2（存在问题），
+	// 绝不是旧行为「报用法并失败」的 1。绑定回环关闭端口，使连通性探测秒拒、无外网依赖。
+	t.Setenv("A3_SERVER_URL", "http://127.0.0.1:1")
+	t.Setenv("A3_STATE_DIR", t.TempDir())
+	assert.Contains(t, []int{0, 2}, runAgentCLI(nil), "无子命令应默认跑 doctor 而非报用法")
+	assert.Contains(t, []int{0, 2}, runAgentCLI([]string{"--doctor"}), "--doctor 别名应等价 doctor")
+
 	assert.Equal(t, 1, runAgentCLI([]string{"no-such-command"}), "未知子命令应失败")
 	assert.Equal(t, 1, runAgentCLI([]string{"hook"}), "hook 缺子子命令应失败")
 }
