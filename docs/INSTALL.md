@@ -50,7 +50,7 @@ curl http://aa.bb.com:12345/install.sh | sh
 
 就这么一条。脚本自动识别 macOS/Linux 和芯片架构，完成全部四步：
 
-1. 下载采集器装到 `~/.a3/bin/a3-agent`
+1. 下载采集器（校验发布签名）原子装到 `~/.a3/bin/a3-agent`，保留上一版可回滚
 2. 登记设备（按提示粘贴管理员下发的安装凭据；Token 存到 `~/.a3/`）
 3. 安装 Claude Code 前置 Hook（高危命令拦截上报）
 4. 安装常驻服务（开机自启、崩溃自动拉起）
@@ -66,12 +66,31 @@ curl http://aa.bb.com:12345/install.sh | sh
 ### 常用命令（都在 `~/.a3/bin/` 下）
 
 ```bash
-~/.a3/bin/a3-agent doctor             # 自检：装没装好、缺什么一眼看清（全部通过才退出码 0，有问题为 2）
+~/.a3/bin/a3-agent doctor             # 自检：装没装好、缺什么一眼看清（全部通过才退出码 0，有问题为 2；含发布签名逐字节复核）
+~/.a3/bin/a3-agent rollback           # 回滚到上一版本（升级后异常时立退）
 ~/.a3/bin/a3-agent service-status     # 只看常驻服务状态
 tail -f ~/.a3/agent.log               # 看采集器日志
 ~/.a3/bin/a3-agent uninstall-service  # 卸载常驻服务
 ~/.a3/bin/a3-agent uninstall-hook     # 卸载拦截 Hook
 ```
+
+### 签名校验与升级
+
+服务端默认对采集器产物做**发布签名**：安装脚本按下载到的具体字节校验签名通过才落位，
+防止把篡改、损坏或陈旧的产物装上。Linux 的 OpenSSL 3 会在装前内联验签（失败立即终止）；
+macOS 系统 openssl 无 ed25519 验签能力，安装时降级为显式警告 + 指纹核对，真正的强制复核
+由装完后的 `doctor` 完成——`doctor` 会固定校验 `~/.a3/bin/a3-agent` 与配套签名是否一致。
+
+**升级 = 重跑同一条安装命令**：脚本原子替换为新版本并保留上一版（`~/.a3/bin/a3-agent.prev`），
+已登记身份不破坏。新版本出问题可随时回退：
+
+```bash
+~/.a3/bin/a3-agent rollback          # 当前版本与上一版互换，a3-agent 全程存在不会半截
+~/.a3/bin/a3-agent doctor            # 回退后复检签名与安装状态
+```
+
+升级后若常驻服务在运行，需重启它（macOS `launchctl kickstart -k gui/$(id -u)/com.a3.agent`；
+Linux `systemctl --user restart a3-agent`）新版本才生效。
 
 ---
 
@@ -82,6 +101,7 @@ tail -f ~/.a3/agent.log               # 看采集器日志
 | 打不开控制台/指南页 | 确认容器在跑：`docker compose -f deploy/docker-compose.yml ps`；看日志：`docker compose -f deploy/docker-compose.yml logs server` |
 | 安装命令提示 403/凭据无效 | 管理员下发的安装凭据缺失、已过期或次数用尽：请管理员在「安装凭据」页生成新凭据再试 |
 | 安装命令提示下载为空 | 服务端未配置产物目录：容器部署镜像内已内置，无需操作；二进制直跑需设 `A3_AGENT_DIST=bin/release` 并先跑 `make release-agent` |
+| 安装命令提示签名校验失败 | 产物被篡改或下载不完整：重跑安装命令；若服务端产物目录刚被改动过，让管理员重启服务端重新发布（产物改动后签名拒不刷新，属正常防护） |
 | 安装命令提示需携带既有 Token | 这台机器之前登记过：重装会自动复用原身份；Token 丢了就找管理员在控制台「设备」页「换发 Token」并把新 Token 发给你（换发后旧 Token 立即失效） |
 | 被拦的命令是误报 | 找管理员在「规则」页停用或调整对应规则，改动即时生效 |
 
