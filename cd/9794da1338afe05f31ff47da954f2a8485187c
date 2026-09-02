@@ -1,0 +1,95 @@
+deploy/.env.example
+  s_8301e3490dd7cb::t_af29e5d3617e64 36-40
+internal/server/api/installer/installer_e2e_test.go
+  s_8301e3490dd7cb::t_71f2dcd05836b7 212
+  s_8301e3490dd7cb::t_1a95c59c0eee89 166-168
+  s_8301e3490dd7cb::t_ff5d6737f56d55 1-134,138-165,169-211
+  s_8301e3490dd7cb::t_ca1d20684c82ea 135-137
+internal/server/api/installer/installer_test.go
+  s_8301e3490dd7cb::t_444e8f78a6257f 41-44,46-49
+  s_8301e3490dd7cb::t_5a74553083d34d 4-8,17,20-21,35,40,45,50-51,53,72-73,75-133,150
+  s_8301e3490dd7cb::t_270f7724a003c3 74
+internal/server/api/installer/installer.go
+  s_8301e3490dd7cb::t_9c47ad89117349 2-3,7-9,11-12
+  s_8301e3490dd7cb::t_1e4e9c88376bae 61,67
+  s_8301e3490dd7cb::t_c0c4f36ed59438 46,48-49,56-60,62-66,68-70,76,82-85
+  s_8301e3490dd7cb::t_e9dc664d96bda0 86-87
+internal/server/api/agent_sig.go
+  s_8301e3490dd7cb::t_f1d9ff8158ec26 1-55
+internal/server/api/install_routes_test.go
+  s_8301e3490dd7cb::t_b8c389d16fcc41 141-142,145-153,164-245
+  s_8301e3490dd7cb::t_284191744d38d1 6
+  s_8301e3490dd7cb::t_5eade536da0587 4-5,28-40,50,64,76
+  s_8301e3490dd7cb::t_a84b238ed7e603 154-163
+README.md
+  s_8301e3490dd7cb::t_41afc1f479dd4d 115
+  s_8301e3490dd7cb::t_937af7dcbf0821 135-152
+internal/server/api/router.go
+  s_8301e3490dd7cb::t_4d00d67b6914a3 5-7
+  s_8301e3490dd7cb::t_0e61d010aa2dc3 38-40,45-51,62-70,82-84
+cmd/agent/doctor_test.go
+  s_8301e3490dd7cb::t_78d63b26ec15ca 5-8
+  s_8301e3490dd7cb::t_bb69eaad205964 96-192
+internal/server/api/install_routes.go
+  s_8301e3490dd7cb::t_86cbe015f52b3a 18-19,26,37-38,41-46,59-80,83,86-89
+  s_8301e3490dd7cb::t_53c0fc8dbcb33e 5,8
+cmd/agent/service.go
+  s_8301e3490dd7cb::t_bce617e4d73e70 27-35
+  s_8301e3490dd7cb::t_d533bb823cf12f 45
+  s_8301e3490dd7cb::t_d407c7d4eae97f 147
+  s_8301e3490dd7cb::t_a28fef19ba64bf 36
+cmd/agent/doctor.go
+  s_8301e3490dd7cb::t_ace2e2a1a67e13 167,171
+  s_8301e3490dd7cb::t_d5019b4119e290 206
+  s_8301e3490dd7cb::t_af5175929bff92 102-122
+  s_8301e3490dd7cb::t_54f23e9e5a064f 190,200
+  s_8301e3490dd7cb::t_b12cef6ef48781 137
+  s_8301e3490dd7cb::t_77a4915a10c944 61-66
+  s_8301e3490dd7cb::t_7d8a201f28b6c8 150
+  s_8301e3490dd7cb::t_8afdee0b4b2d67 4-6,8-10,31
+  s_8301e3490dd7cb::t_6a56d7120e986a 252-327
+  s_8301e3490dd7cb::t_e97795a85d8562 180
+internal/server/config/config.go
+  s_8301e3490dd7cb::t_261e1993b4828e 33-35
+  s_8301e3490dd7cb::t_dbc0d51ac5c540 114-132
+  s_8301e3490dd7cb::t_b430868d7bfc03 172-194,196-207,211,213,216,219,223,225,227,229,231
+  s_8301e3490dd7cb::t_3d1285d49cb9e8 5,7,17-18,23
+internal/server/api/installer/install.sh.tmpl
+  s_8301e3490dd7cb::t_d0a539b87db485 79,82-83
+  s_8301e3490dd7cb::t_5f47aedc6dd3f3 2,4,7,10-11,55-57,59-64,66-78,81,84-129,192,198
+  s_8301e3490dd7cb::t_d3475596f177d0 80
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_29477700d70e2d 58-59
+  s_8301e3490dd7cb::t_b96853959df81d 127
+  s_8301e3490dd7cb::t_bcca72b354b79e 10
+internal/server/config/config_test.go
+  s_8301e3490dd7cb::t_c55d472a3aafe1 23
+  s_8301e3490dd7cb::t_dbc8ef51401df9 215-265
+  s_8301e3490dd7cb::t_0f1c100a6b65eb 4-6
+cmd/server/main.go
+  s_8301e3490dd7cb::t_6182f9aec2b4af 42-45
+  s_8301e3490dd7cb::t_e94cb96728bbc6 85-91
+cmd/agent/rollback_test.go
+  s_8301e3490dd7cb::t_e2f9f800869e96 94-96,98-99,103-105
+  s_8301e3490dd7cb::t_a95a0d2752847d 1-93,97,100-102,106
+cmd/agent/rollback.go
+  s_8301e3490dd7cb::t_a4a07cc04c9f91 51-53,58,61-68,79-81,84
+  s_8301e3490dd7cb::t_71e8096f5fb5f8 71-73,75-77
+  s_8301e3490dd7cb::t_6039d58ee2459d 1-50,54-57,59-60,69-70,74,78,82-83,85-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cd9794da1338afe05f31ff47da954f2a8485187c",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
