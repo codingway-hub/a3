@@ -20,10 +20,19 @@ const (
 	launchdLabel       = "com.a3.agent"
 	launchdPlistName   = launchdLabel + ".plist"
 	systemdUnitName    = "a3-agent.service"
-	agentBinSubPath    = ".a3/bin/a3-agent"
 	agentLogSubPath    = ".a3/agent.log"
 	serviceMarkerToken = launchdLabel // plist/unit 归属标记：覆盖前校验，防误删用户同名文件
 )
+
+// agentBinPathFor 采集器安装的固定二进制路径；Windows 下补 .exe（旧版 agentBinSubPath
+// 缺后缀导致 schtasks/doctor 指向不存在文件）。
+func agentBinPathFor(homeDir string) string {
+	binName := "a3-agent"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	return filepath.Join(homeDir, ".a3", "bin", binName)
+}
 
 // installServiceCommand 安装常驻服务：macOS launchd / Linux systemd user unit；
 // Windows 打印手动指引。返回退出码。
@@ -33,7 +42,7 @@ func installServiceCommand(flagArguments []string) int {
 		fmt.Fprintf(os.Stderr, "%v\n", homeErr)
 		return 1
 	}
-	agentBinPath := filepath.Join(homeDir, agentBinSubPath)
+	agentBinPath := agentBinPathFor(homeDir)
 	if _, statErr := os.Stat(agentBinPath); statErr != nil {
 		fmt.Fprintf(os.Stderr, "未找到采集器二进制 %s：请先完成安装（curl <服务端>/install.sh | sh）\n", agentBinPath)
 		return 1
@@ -135,7 +144,7 @@ func serviceStatusCommand(flagArguments []string) int {
 		return 1
 	}
 
-	fmt.Printf("二进制: %s\n", filepath.Join(homeDir, agentBinSubPath))
+	fmt.Printf("二进制: %s\n", agentBinPathFor(homeDir))
 	switch runtime.GOOS {
 	case "darwin":
 		plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", launchdPlistName)

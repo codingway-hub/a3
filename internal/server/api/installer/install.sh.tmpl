@@ -1,12 +1,14 @@
 #!/bin/sh
-# a3 采集器一键安装脚本（由 a3 服务端 /install.sh 动态生成：服务端地址已注入下方 SERVER_URL）。
+# a3 采集器一键安装脚本（由 a3 服务端 /install.sh 动态生成：服务端地址与发布签名公钥已注入）。
 # 用法：curl <服务端地址>/install.sh | sh
-# 自动完成：下载采集器 → 装到 ~/.a3/bin → 注册 → 安装 Hook → 安装常驻服务。
+# 自动完成：下载采集器并校验签名 → 原子装到 ~/.a3/bin（保留上一版本可回滚） → 注册 → 安装 Hook → 安装常驻服务。
 set -eu
 
-SERVER_URL="{{.ServerURL}}"
+SERVER_URL={{.ServerURL}}
 INSTALL_DIR="$HOME/.a3/bin"
 AGENT_BIN="$INSTALL_DIR/a3-agent"
+PREV_BIN="$AGENT_BIN.prev"
+SIGN_PUBKEY_FILE="$HOME/.a3/agent-pubkey.pem"
 
 # 允许环境变量覆盖注入的服务端地址（高级用法；一般用户无需设置）
 if [ -n "${A3_SERVER_URL:-}" ]; then
@@ -50,16 +52,81 @@ else
   exit 1
 fi
 
-# —— 下载 + 自检 + 原子落位 ——
+# —— 下载 + 签名校验 + 原子落位 ——
+# 同目录 stage：先落 $INSTALL_DIR 内临时文件（同文件系统），rename 落位才是原子的，
+# 避免 mktemp /tmp 跨文件系统 mv 退化为 copy+unlink 的半写窗口。
 mkdir -p "$INSTALL_DIR"
-TMP_BIN="$(mktemp "${TMPDIR:-/tmp}/a3-agent.XXXXXX")"
-trap 'rm -f "$TMP_BIN"' EXIT
+STAGE_BIN="$INSTALL_DIR/.a3-agent.stage.$$"
+STAGE_SIG="$STAGE_BIN.sig"
+trap 'rm -f "$STAGE_BIN" "$STAGE_SIG"' EXIT
+{{if .SignEnabled}}SIGN_PUBKEY_B64="{{.SignPubB64}}"
+SIGN_FINGERPRINT="{{.SignFingerprint}}"{{end}}
+
 echo "==> 下载采集器…"
-fetch "$SERVER_URL/download/agent/$ASSET_NAME" "$TMP_BIN"
-[ -s "$TMP_BIN" ] || { echo "❌ 下载为空，服务端可能未配置产物目录（A3_AGENT_DIST）"; exit 1; }
-chmod +x "$TMP_BIN"
-"$TMP_BIN" version >/dev/null 2>&1 || { echo "❌ 下载产物自检失败（无法执行），请反馈管理员"; exit 1; }
-mv -f "$TMP_BIN" "$AGENT_BIN"
+fetch "$SERVER_URL/download/agent/$ASSET_NAME" "$STAGE_BIN" || {
+  echo "❌ 下载失败：请确认服务端地址与网络可达（服务端需配置 A3_AGENT_DIST）" >&2
+  exit 1
+}
+[ -s "$STAGE_BIN" ] || { echo "❌ 下载为空，服务端可能未配置产物目录（A3_AGENT_DIST）"; exit 1; }
+{{if .SignEnabled}}
+echo "==> 下载发布签名…"
+fetch "$SERVER_URL/download/agent/$ASSET_NAME.sig" "$STAGE_SIG" || {
+  echo "❌ 签名下载失败（HTTP 409 = 服务端产物被修改但未重新发布，请联系管理员重启服务端；网络错误请检查地址）" >&2
+  exit 1
+}
+[ -s "$STAGE_SIG" ] || { echo "❌ 签名为空"; exit 1; }
+
+# 持久化公钥供采集器 doctor 自检复核。围栏在 printf 值位而非格式位（%s 传参），
+# 规避以 - 开头的格式串被 macOS bash 的 printf 误判为选项而在 set -e 下中断。
+mkdir -p "$HOME/.a3"
+printf '%s\n%s\n%s\n' '-----BEGIN PUBLIC KEY-----' \
+  "$(printf '%s' "$SIGN_PUBKEY_B64" | fold -w 64)" '-----END PUBLIC KEY-----' > "$SIGN_PUBKEY_FILE"
+chmod 600 "$SIGN_PUBKEY_FILE"
+
+# 验签能力探测：仅 OpenSSL 3 支持 ed25519 的 pkeyutl -verify -rawin。
+# macOS 系统 openssl 为 LibreSSL 3.3（genpkey 即报找不到 ed25519），探测不到就降级；
+# 能力判定只看版本字符串、不按失败消息分桶——pkeyutl 对参数缺失/签名不匹配/长度错误
+# 全部返回非 0，「能验签」与「验签通过」必须分开判定，绝不能把校验失败放行进降级分支。
+SIG_CAPABLE=false
+oav="$(LC_ALL=C openssl version 2>/dev/null || true)"
+case "$oav" in *"OpenSSL 3"*) SIG_CAPABLE=true ;; esac
+
+if [ "$SIG_CAPABLE" = true ]; then
+  verify_rc=0
+  verify_out="$(LC_ALL=C openssl pkeyutl -verify -pubin -inkey "$SIGN_PUBKEY_FILE" \
+    -rawin -in "$STAGE_BIN" -sigfile "$STAGE_SIG" 2>&1)" || verify_rc=$?
+  if [ "$verify_rc" -ne 0 ]; then
+    echo "❌ 采集器产物签名校验失败（可能被篡改或下载损坏）。" >&2
+    echo "   服务端发布指纹: $SIGN_FINGERPRINT（请与管理员公布的指纹核对）" >&2
+    exit 1
+  fi
+  echo "==> 签名校验通过（指纹: $SIGN_FINGERPRINT）"
+else
+  echo "⚠️ 本机无 ed25519 验签能力（openssl: ${oav:-不可用}），签名校验延后至采集器 doctor 自检。"
+  echo "   服务端发布指纹: $SIGN_FINGERPRINT（请与管理员公布的指纹核对）"
+  echo "   安装完成后请执行: \"$AGENT_BIN\" doctor 复核安装字节"
+fi
+{{else}}
+echo "⚠️ 签名校验已禁用（服务端未配置签名密钥）——本次产物下载未做身份校验"
+{{end}}
+
+# 自检产物可执行（在签名校验之后才允许执行下载字节）
+chmod +x "$STAGE_BIN"
+"$STAGE_BIN" version >/dev/null 2>&1 || { echo "❌ 下载产物自检失败（无法执行），请反馈管理员"; exit 1; }
+
+# 原子落位：同目录 rename 原子；先 sig 后 bin，最小化「新 bin + 旧 sig」窗口。
+# 备份上一版本（.prev）+ 配对签名（.prev.sig）供 rollback 回滚；校验未过前的失败不会触碰。
+echo "==> 原子落位（保留上一版本供 rollback 回滚）…"
+if [ -f "$AGENT_BIN" ]; then
+  cp -p "$AGENT_BIN" "$PREV_BIN"
+  if [ -f "$AGENT_BIN.sig" ]; then
+    cp -p "$AGENT_BIN.sig" "$PREV_BIN.sig"
+  fi
+fi
+{{if .SignEnabled}}
+mv -f "$STAGE_SIG" "$AGENT_BIN.sig"
+{{end}}
+mv -f "$STAGE_BIN" "$AGENT_BIN"
 echo "==> 已安装到 $AGENT_BIN"
 
 # —— 注册（幂等：已登记机器复用原身份、无需凭据；凭据仅经 stdin 提交） ——
@@ -122,9 +189,10 @@ echo "==> 安装 PreToolUse Hook…"
 # —— 常驻服务（开机自启 + 崩溃拉起；失败不阻断） ——
 echo "==> 安装常驻服务…"
 if ! "$AGENT_BIN" install-service; then
-  echo "⚠️ 常驻服务未就绪：请手动执行 \"$AGENT_BIN run\" 开始采集"
+  echo "⚠️ 常驻服务未就绪：请手动执行 \"$AGENT_BIN\" run 开始采集"
 fi
 
 echo
 echo "✅ 安装完成！正在由常驻进程自动采集（日志: $HOME/.a3/agent.log）"
 echo "   验证: \"$AGENT_BIN\" doctor；卸载: \"$AGENT_BIN\" uninstall-service && \"$AGENT_BIN\" uninstall-hook"
+echo "   升级安装时若常驻服务在运行，重启常驻服务（launchctl kickstart -k / systemctl --user restart）后新版本生效"

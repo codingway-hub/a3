@@ -2,6 +2,9 @@
 package api
 
 import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,16 +35,20 @@ type Router struct {
 	agentAssetPaths map[string]string // 白名单产物名 → 磁盘路径，启动期建立，绝不拼接用户输入
 	version         string            // 服务端版本（healthz/概览展示）
 	startedAt       time.Time         // 启动时刻（运行时长计算基准）
+	signatures      *agentSigner      // 采集器产物代际签名器；nil 表示未配置签名（install.sh 降级为不校验）
+	signPub         ed25519.PublicKey // 发布签名公钥（注入 install.sh / setup-info）
+	signFingerprint string            // 公钥 sha256 指纹（hex，供终端与管理员离带核对）
 }
 
 // RouterConfig 是装配参数。
 type RouterConfig struct {
-	JWTSecret string
-	WebDist   string
-	AgentDist string
-	PublicURL string
-	DeviceAPI *ingest.Handler
-	Version   string
+	JWTSecret  string
+	WebDist    string
+	AgentDist  string
+	PublicURL  string
+	DeviceAPI  *ingest.Handler
+	Version    string
+	SigningKey ed25519.PrivateKey // 采集器发布签名私钥；nil 合法（未配置即 install.sh 不校验签名）
 }
 
 // NewRouter 构建装配器。
@@ -51,6 +58,15 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		for _, assetName := range installer.SupportedAssetNames() {
 			agentAssetPaths[assetName] = filepath.Join(routerConfig.AgentDist, assetName)
 		}
+	}
+	var signer *agentSigner
+	var signPublicKey ed25519.PublicKey
+	var signFingerprint string
+	if routerConfig.SigningKey != nil {
+		signer = newAgentSigner(routerConfig.SigningKey)
+		signPublicKey = routerConfig.SigningKey.Public().(ed25519.PublicKey)
+		pubSHA := sha256.Sum256(signPublicKey)
+		signFingerprint = hex.EncodeToString(pubSHA[:])
 	}
 	return &Router{
 		eventStore:      eventStore,
@@ -63,6 +79,9 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		agentAssetPaths: agentAssetPaths,
 		version:         routerConfig.Version,
 		startedAt:       time.Now(),
+		signatures:      signer,
+		signPub:         signPublicKey,
+		signFingerprint: signFingerprint,
 	}
 }
 

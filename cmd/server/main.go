@@ -39,6 +39,10 @@ func main() {
 		logger.Warn("A3_JWT_SECRET 未显式配置，已自动生成登录密钥并持久化（目录 0700/文件 0600），重启后控制台会话保持",
 			"path", serverConfig.JWTSecretPath)
 	}
+	if serverConfig.SigningKeyGenerated {
+		logger.Warn("A3_AGENT_SIGNING_KEY 未显式配置，已自动生成采集器发布签名密钥并持久化（目录 0700/文件 0600），重启后签名代际稳定",
+			"path", serverConfig.SigningKeyPath)
+	}
 
 	ctx := context.Background()
 
@@ -78,12 +82,13 @@ func main() {
 
 	// HTTP 装配
 	router := api.NewRouter(eventStore, alertService, api.RouterConfig{
-		JWTSecret: serverConfig.JWTSecret,
-		WebDist:   serverConfig.WebDist,
-		AgentDist: serverConfig.AgentDist,
-		PublicURL: serverConfig.PublicURL,
-		DeviceAPI: ingest.NewHandler(ingest.NewService(eventStore, alertService)),
-		Version:   serverVersion,
+		JWTSecret:  serverConfig.JWTSecret,
+		SigningKey: serverConfig.SigningKey,
+		WebDist:    serverConfig.WebDist,
+		AgentDist:  serverConfig.AgentDist,
+		PublicURL:  serverConfig.PublicURL,
+		DeviceAPI:  ingest.NewHandler(ingest.NewService(eventStore, alertService)),
+		Version:    serverVersion,
 	})
 	engine := router.Setup()
 

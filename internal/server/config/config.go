@@ -2,7 +2,9 @@
 package config
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,12 +14,13 @@ import (
 	"strings"
 )
 
-// 服务端持久状态目录与 JWT 密钥文件名。
-// 状态目录存重启不掉的登录态签名密钥等凭据：目录 0700、密钥文件 0600。
+// 服务端持久状态目录与凭据类密钥文件名。
+// 状态目录存重启不掉的登录态签名密钥、采集器发布签名密钥等凭据：目录 0700、密钥文件 0600。
 // 注意不与客户端 A3_STATE_DIR（默认 ~/.a3）混用，避免身份/密钥状态目录互相串味。
 const (
 	defaultStateDirName = ".a3-server"
 	jwtSecretFileName   = "jwt-secret"
+	agentSigningKeyFile = "agent-signing-key"
 )
 
 // Config 是服务端运行配置。
@@ -27,6 +30,9 @@ type Config struct {
 	JWTSecret           string // 控制台 JWT 签名密钥
 	JWTSecretGenerated  bool   // JWTSecret 是否为本启动新建并落盘（需日志提示持久化路径）
 	JWTSecretPath       string // JWT 密钥持久化路径（显式 A3_JWT_SECRET 时为空）
+	SigningKey          ed25519.PrivateKey // 采集器发布签名私钥；nil 表示未配置（A3_AGENT_DIST 场景自动生成）
+	SigningKeyGenerated bool               // 本启动新建并落盘（需日志提示持久化路径）
+	SigningKeyPath      string             // 发布签名密钥持久化路径（显式 A3_AGENT_SIGNING_KEY 时为空）
 	AdminUsername       string
 	AdminPassword       string // 管理员种子口令（仅账号表为空的首启生效；显式提供，绝不自动生成）
 	StateDir            string // 服务端持久状态目录 A3_SERVER_STATE_DIR；默认 ~/.a3-server
@@ -105,6 +111,25 @@ func Load() (*Config, error) {
 		serverConfig.JWTSecretGenerated = generated
 	}
 
+	// 采集器发布签名密钥：镜像 JWT 模式。显式 A3_AGENT_SIGNING_KEY（32 字节 seed 的 base64）最优先；
+	// 留空则从状态目录复用/新建并原子落盘 0600，重启稳定。nil 表示未配置（install.sh 降级为不校验）。
+	// 私钥只用于对发布产物签发 ed25519 签名，公钥经 install.sh 下发终端，信任根=本状态目录。
+	if explicitSeedText := strings.TrimSpace(os.Getenv("A3_AGENT_SIGNING_KEY")); explicitSeedText != "" {
+		decodedSeed, decodeErr := base64.StdEncoding.DecodeString(explicitSeedText)
+		if decodeErr != nil || len(decodedSeed) != ed25519.SeedSize {
+			return nil, fmt.Errorf("A3_AGENT_SIGNING_KEY 非法：需是 %d 字节 seed 的 base64（可留空自动生成并持久化）", ed25519.SeedSize)
+		}
+		serverConfig.SigningKey = ed25519.NewKeyFromSeed(decodedSeed)
+	} else {
+		persistedSeed, signingKeyPath, generated, signingKeyErr := loadOrCreateSigningKey(stateDir)
+		if signingKeyErr != nil {
+			return nil, signingKeyErr
+		}
+		serverConfig.SigningKey = ed25519.NewKeyFromSeed(persistedSeed)
+		serverConfig.SigningKeyPath = signingKeyPath
+		serverConfig.SigningKeyGenerated = generated
+	}
+
 	// 管理员口令只读环境变量、绝不自动生成：口令一旦随机进日志即等于泄密；
 	// 首启且账号表为空时必须在 main 显式提供（见 seedAdminUser 空口令报错）。
 	return serverConfig, nil
@@ -144,33 +169,66 @@ func loadOrCreateJWTSecret(stateDir string) (secret string, secretPath string, g
 	return generatedSecret, secretPath, true, nil
 }
 
-// writeJWTSecret 原子落盘 JWT 密钥并收紧权限：临时文件+改名，目录 0700、文件 0600。
+// loadOrCreateSigningKey 返回发布签名 seed（32 字节）、落盘路径与本启动是否新建。
+// 已持久化的 seed 直接复用（重启签名稳定）；文件缺失/损坏则重新生成并原子落盘 0600。
+func loadOrCreateSigningKey(stateDir string) (seed []byte, keyPath string, generated bool, err error) {
+	keyPath = filepath.Join(stateDir, agentSigningKeyFile)
+	if persistedBytes, readErr := os.ReadFile(keyPath); readErr == nil {
+		if decodedSeed, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(persistedBytes))); decodeErr == nil && len(decodedSeed) == ed25519.SeedSize {
+			return decodedSeed, keyPath, false, nil
+		}
+	} else if !errors.Is(readErr, os.ErrNotExist) {
+		return nil, "", false, fmt.Errorf("读取持久化发布签名密钥失败: %w", readErr)
+	}
+
+	generatedSeed := make([]byte, ed25519.SeedSize)
+	if _, generateErr := rand.Read(generatedSeed); generateErr != nil {
+		return nil, "", false, fmt.Errorf("生成发布签名密钥失败: %w", generateErr)
+	}
+	if writeErr := writeSigningKey(keyPath, generatedSeed); writeErr != nil {
+		return nil, "", false, writeErr
+	}
+	return generatedSeed, keyPath, true, nil
+}
+
+// writeJWTSecret 原子落盘 JWT 密钥并收紧权限（目录 0700、文件 0600）。
 func writeJWTSecret(secretPath string, secret string) error {
-	stateDir := filepath.Dir(secretPath)
+	return atomicWriteSecret(secretPath, ".jwt-secret-*.tmp", secret, 0o600)
+}
+
+// writeSigningKey 原子落盘发布签名 seed（base64 文本）并收紧权限（目录 0700、文件 0600）。
+func writeSigningKey(keyPath string, seed []byte) error {
+	return atomicWriteSecret(keyPath, ".agent-signing-key-*.tmp", base64.StdEncoding.EncodeToString(seed)+"\n", 0o600)
+}
+
+// atomicWriteSecret 原子写凭据类持久化文件：同目录临时文件 + 改名，杜绝半写；目录 0700、文件 chmodMode。
+// 供 JWT 密钥与发布签名密钥共用——两者都是重启不掉、被替换即会话/签名失效的凭据。
+func atomicWriteSecret(finalPath string, tempPattern string, payload string, chmodMode os.FileMode) error {
+	stateDir := filepath.Dir(finalPath)
 	if mkdirErr := os.MkdirAll(stateDir, 0o700); mkdirErr != nil {
 		return fmt.Errorf("创建服务端状态目录失败: %w", mkdirErr)
 	}
-	tempFile, createErr := os.CreateTemp(stateDir, ".jwt-secret-*.tmp")
+	tempFile, createErr := os.CreateTemp(stateDir, tempPattern)
 	if createErr != nil {
-		return fmt.Errorf("创建 JWT 密钥临时文件失败: %w", createErr)
+		return fmt.Errorf("创建密钥临时文件失败: %w", createErr)
 	}
 	tempName := tempFile.Name()
-	if _, writeErr := tempFile.WriteString(secret); writeErr != nil {
+	if _, writeErr := tempFile.WriteString(payload); writeErr != nil {
 		_ = tempFile.Close()
 		_ = os.Remove(tempName)
-		return fmt.Errorf("写入 JWT 密钥临时文件失败: %w", writeErr)
+		return fmt.Errorf("写入密钥临时文件失败: %w", writeErr)
 	}
 	if closeErr := tempFile.Close(); closeErr != nil {
 		_ = os.Remove(tempName)
-		return fmt.Errorf("关闭 JWT 密钥临时文件失败: %w", closeErr)
+		return fmt.Errorf("关闭密钥临时文件失败: %w", closeErr)
 	}
-	if chmodErr := os.Chmod(tempName, 0o600); chmodErr != nil {
+	if chmodErr := os.Chmod(tempName, chmodMode); chmodErr != nil {
 		_ = os.Remove(tempName)
-		return fmt.Errorf("收紧 JWT 密钥文件权限失败: %w", chmodErr)
+		return fmt.Errorf("收紧密钥文件权限失败: %w", chmodErr)
 	}
-	if renameErr := os.Rename(tempName, secretPath); renameErr != nil {
+	if renameErr := os.Rename(tempName, finalPath); renameErr != nil {
 		_ = os.Remove(tempName)
-		return fmt.Errorf("持久化 JWT 密钥失败: %w", renameErr)
+		return fmt.Errorf("持久化密钥失败: %w", renameErr)
 	}
 	return nil
 }

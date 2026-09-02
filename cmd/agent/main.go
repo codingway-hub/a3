@@ -7,6 +7,7 @@
 //	install-hook     安装 PreToolUse Hook 到 ~/.claude/settings.json
 //	uninstall-hook   卸载上述 Hook
 //	register         显式注册设备并保存 Token（分布式部署模式）
+//	rollback         回滚采集器到上一版本（升级链路保留 .prev）
 //	doctor           自检：逐项体检是否装好（无子命令时默认执行）
 //	version          打印版本
 package main
@@ -54,6 +55,8 @@ func runAgentCLI(arguments []string) int {
 		return uninstallServiceCommand(arguments[1:])
 	case "service-status":
 		return serviceStatusCommand(arguments[1:])
+	case "rollback":
+		return rollbackCommand(arguments[1:])
 	case "doctor", "--doctor":
 		return doctorCommand(arguments[1:])
 	case "version":
@@ -121,6 +124,7 @@ func printUsage(output *os.File) {
   a3-agent install-service          安装常驻服务（macOS launchd / Linux systemd，开机自启）
   a3-agent uninstall-service        移除常驻服务
   a3-agent service-status           查看常驻服务状态
+  a3-agent rollback                 回滚到上一版本（升级后异常立退）
   a3-agent version                  版本
 
 run 常用 flags:

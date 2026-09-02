@@ -2,6 +2,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,4 +93,101 @@ func TestRunDoctorSpoolUnwritableFails(t *testing.T) {
 
 	assert.Equal(t, 2, exitCode)
 	assert.Contains(t, outputBuffer.String(), "[失败] 断网缓存")
+}
+
+// installAgentSignatureLayout 复刻 install.sh 安装期落盘：二进制 + 配套签名 + PEM 公钥
+// （DER-base64 + fold 64 列 + BEGIN/END 围栏，与模板的 printf|fold 重建一致）。
+func installAgentSignatureLayout(t *testing.T, homeDir string, binBytes []byte) ed25519.PublicKey {
+	t.Helper()
+	publicKey, privateKey, generateErr := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, generateErr)
+
+	binDir := filepath.Join(homeDir, ".a3", "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "a3-agent"), binBytes, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "a3-agent.sig"),
+		ed25519.Sign(privateKey, binBytes), 0o600))
+
+	pubDER, derErr := x509.MarshalPKIXPublicKey(publicKey)
+	require.NoError(t, derErr)
+	foldedLines := foldBase64Lines(base64.StdEncoding.EncodeToString(pubDER))
+	pemText := "-----BEGIN PUBLIC KEY-----\n" + foldedLines + "\n-----END PUBLIC KEY-----\n"
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".a3"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".a3", "agent-pubkey.pem"), []byte(pemText), 0o600))
+	return publicKey
+}
+
+// foldBase64Lines 按 64 列折叠 base64（等价 sh 的 fold -w 64，最后一行不带尾换行）。
+func foldBase64Lines(text string) string {
+	var folded string
+	for len(text) > 64 {
+		folded += text[:64] + "\n"
+		text = text[64:]
+	}
+	return folded + text
+}
+
+func TestRunDoctorSignaturePass(t *testing.T) {
+	homeDir := t.TempDir()
+	agentConfig := testDoctorConfig(t, homeDir)
+	storeIdentity(t, agentConfig.StateDir)
+
+	binBytes := []byte("final-agent-binary-bytes")
+	installAgentSignatureLayout(t, homeDir, binBytes)
+
+	var outputBuffer bytes.Buffer
+	exitCode := runDoctor(homeDir, agentConfig, &outputBuffer, false)
+
+	assert.Equal(t, 0, exitCode, "签名一致时自检应通过")
+	outputText := outputBuffer.String()
+	assert.Contains(t, outputText, "[通过] 发布签名")
+	assert.Contains(t, outputText, "与发布签名一致")
+	assert.Contains(t, outputText, "指纹:", "应给出公钥指纹供与服务端核对")
+}
+
+func TestRunDoctorSignatureTamperedFails(t *testing.T) {
+	homeDir := t.TempDir()
+	agentConfig := testDoctorConfig(t, homeDir)
+	storeIdentity(t, agentConfig.StateDir)
+	installAgentSignatureLayout(t, homeDir, []byte("original-binary"))
+
+	// 篡改安装字节（未重新发布）→ 自检必须硬失败
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".a3", "bin", "a3-agent"), []byte("tampered!"), 0o755))
+
+	var outputBuffer bytes.Buffer
+	exitCode := runDoctor(homeDir, agentConfig, &outputBuffer, false)
+
+	assert.Equal(t, 2, exitCode, "发布签名不匹配必须判失败并退出 2")
+	assert.Contains(t, outputBuffer.String(), "[失败] 发布签名")
+	assert.Contains(t, outputBuffer.String(), "不匹配", "应指出字节与签名不符")
+}
+
+func TestRunDoctorSignatureLayoutMissingSkips(t *testing.T) {
+	homeDir := t.TempDir()
+	agentConfig := testDoctorConfig(t, homeDir)
+	storeIdentity(t, agentConfig.StateDir)
+	// 不装任何签名布局：pre-P2 存量安装情形
+	var outputBuffer bytes.Buffer
+	exitCode := runDoctor(homeDir, agentConfig, &outputBuffer, false)
+
+	assert.Equal(t, 0, exitCode, "无签名布局应 [跳过] 而非判失败，不推高退出码")
+	assert.Contains(t, outputBuffer.String(), "[跳过] 发布签名")
+}
+
+func TestRunDoctorReportsRollbackAvailable(t *testing.T) {
+	homeDir := t.TempDir()
+	agentConfig := testDoctorConfig(t, homeDir)
+	storeIdentity(t, agentConfig.StateDir)
+
+	binDir := filepath.Join(homeDir, ".a3", "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "a3-agent.prev"), []byte("legacy-prev"), 0o755))
+
+	var outputBuffer bytes.Buffer
+	exitCode := runDoctor(homeDir, agentConfig, &outputBuffer, false)
+
+	assert.Equal(t, 0, exitCode)
+	assert.Contains(t, outputBuffer.String(), "[信息]", "可回滚属提示信息")
+	assert.Contains(t, outputBuffer.String(), "上一版本已保留")
+	assert.Contains(t, outputBuffer.String(), "a3-agent rollback")
 }
