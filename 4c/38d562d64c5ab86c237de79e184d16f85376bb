@@ -1,0 +1,16 @@
+Dockerfile.server
+  h_f34b8ecec6a1c4 16,21-27,39
+deploy/docker-compose.yml
+  h_f34b8ecec6a1c4 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4c38d562d64c5ab86c237de79e184d16f85376bb",
+  "prompts": {},
+  "humans": {
+    "h_f34b8ecec6a1c4": {
+      "author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
