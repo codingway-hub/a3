@@ -51,11 +51,33 @@
 
       <h3>Windows 用户</h3>
       <p class="guide-note">
-        暂不支持脚本自动安装，请从
-        <a :href="windowsDownloadUrl" download>这里手动下载</a>
-        <code>a3-agent-windows-amd64.exe</code>，重命名为 <code>a3-agent.exe</code> 放入
-        <code>%USERPROFILE%\.a3\bin</code>，然后按 Windows 指引注册并运行。
+        暂不支持脚本自动安装，请按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）：
       </p>
+      <ol class="guide-steps windows-steps">
+        <li>
+          从
+          <a :href="windowsDownloadUrl" download>这里下载</a>
+          <code>a3-agent-windows-amd64.exe</code>，重命名为 <code>a3-agent.exe</code>，
+          放入 <code>%USERPROFILE%\.a3\bin</code>（目录不存在则新建）。
+        </li>
+        <li>
+          打开 cmd 或 PowerShell，执行注册（按提示粘贴管理员下发的安装凭据并回车提交）：
+          <div class="command-block static">
+            <code class="command-text">{{ windowsRegisterCommand }}</code>
+          </div>
+        </li>
+        <li>
+          自检（全绿即装好，有问题会逐项指出）：
+          <div class="command-block static">
+            <code class="command-text">%USERPROFILE%\.a3\bin\a3-agent.exe doctor</code>
+          </div>
+        </li>
+        <li>
+          运行采集：前台执行 <code>%USERPROFILE%\.a3\bin\a3-agent.exe run</code>（保持窗口开启）；
+          如需开机自启，以管理员身份执行 <code>%USERPROFILE%\.a3\bin\a3-agent.exe install-service</code>，
+          按打印出的计划任务命令操作。
+        </li>
+      </ol>
     </el-card>
   </div>
 </template>
@@ -78,6 +100,11 @@ const installCommand = computed(() => {
 const windowsDownloadUrl = computed(() => {
   const baseURL = setupInfo.value?.public_url || window.location.origin
   return `${baseURL}/download/agent/a3-agent-windows-amd64.exe`
+})
+
+const windowsRegisterCommand = computed(() => {
+  const baseURL = setupInfo.value?.public_url || window.location.origin
+  return `%USERPROFILE%\\.a3\\bin\\a3-agent.exe register --server ${baseURL}`
 })
 
 async function copyCommand() {
@@ -164,5 +191,9 @@ h3 {
   font-size: 13px;
   color: #606266;
   line-height: 2;
+}
+
+.windows-steps .command-block {
+  margin: 8px 0;
 }
 </style>

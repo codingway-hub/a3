@@ -58,8 +58,25 @@ curl http://aa.bb.com:12345/install.sh | sh
 装完正常写代码即可。控制台「设备」页很快能看到这台机器，会话/告警逐步出现；
 如果某条高危命令被拦截，Claude Code 里会有中文提示，照着换命令就行。
 
-**Windows**：脚本暂不支持，从指南页的下载链接手动获取 `a3-agent-windows-amd64.exe`，
-按指南页说明放置并运行。
+**Windows**：脚本暂不支持自动安装，按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）：
+
+1. 从指南页的下载链接获取 `a3-agent-windows-amd64.exe`，重命名为 `a3-agent.exe`，
+   放入 `%USERPROFILE%\.a3\bin`（目录不存在则新建）。
+2. 打开 cmd 或 PowerShell，注册设备（按提示粘贴管理员下发的安装凭据并回车提交）：
+
+   ```bat
+   %USERPROFILE%\.a3\bin\a3-agent.exe register --server http://<服务端地址>:<端口>
+   ```
+
+3. 自检（全绿即装好，有问题会逐项指出）：
+
+   ```bat
+   %USERPROFILE%\.a3\bin\a3-agent.exe doctor
+   ```
+
+4. 运行采集：前台执行 `%USERPROFILE%\.a3\bin\a3-agent.exe run`（保持窗口开启）；
+   如需开机自启，以管理员身份执行 `a3-agent.exe install-service`，按打印出的计划任务
+   （schtasks）命令创建即可。
 
 **重复执行同一条命令是安全的**：自动幂等，已登记机器复用原设备身份，不会重复登记或装坏。
 
