@@ -29,7 +29,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      A3_ADDR: ":8080"
+      A3_ADDR: "0.0.0.0:8080"
       A3_DATABASE_URL: postgres://a3:${A3_POSTGRES_PASSWORD:-a3-change-me}@postgres:5432/a3?sslmode=disable
       A3_ADMIN_USER: ${A3_ADMIN_USER:-admin}
       A3_ADMIN_PASSWORD: ${A3_ADMIN_PASSWORD:?请先复制 deploy/.env.example 为 deploy/.env 并设置 A3_ADMIN_PASSWORD}

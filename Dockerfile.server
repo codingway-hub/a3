@@ -13,16 +13,18 @@ RUN npm run build
 FROM golang:1.25-alpine AS server-builder
 WORKDIR /build/src
 COPY go.mod go.sum ./
+RUN go env -w GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/a3-server ./cmd/server
 # 采集器产物随服务端镜像分发（A3_AGENT_DIST），供 install.sh 下载安装
-RUN for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do \
-      distOS=$${platform%/*}; distArch=$${platform#*/}; \
-      distSuffix=""; [ "$$distOS" = "windows" ] && distSuffix=".exe"; \
-      CGO_ENABLED=0 GOOS=$$distOS GOARCH=$$distArch go build -trimpath -ldflags="-s -w" \
-        -o /out/agent/a3-agent-$$distOS-$$distArch$$distSuffix ./cmd/agent || exit 1; \
-    done
+# 注：改为显式枚举，避免 docker compose build 中 $$ + parameter expansion 解析异常
+RUN mkdir -p /out/agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/agent/a3-agent-darwin-amd64 ./cmd/agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/agent/a3-agent-darwin-arm64 ./cmd/agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/agent/a3-agent-linux-amd64 ./cmd/agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/agent/a3-agent-linux-arm64 ./cmd/agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/agent/a3-agent-windows-amd64.exe ./cmd/agent
 
 # ---- 阶段三：运行层 ----
 FROM alpine:3.20
@@ -34,7 +36,7 @@ RUN apk add --no-cache ca-certificates \
 COPY --from=server-builder /out/a3-server /usr/local/bin/a3-server
 COPY --from=web-builder /build/web/dist /app/web/dist
 COPY --from=server-builder /out/agent /app/agent
-ENV A3_ADDR=":8080" A3_WEB_DIST=/app/web/dist A3_AGENT_DIST=/app/agent A3_SERVER_STATE_DIR=/app/state
+ENV A3_ADDR="0.0.0.0:8080" A3_WEB_DIST=/app/web/dist A3_AGENT_DIST=/app/agent A3_SERVER_STATE_DIR=/app/state
 EXPOSE 8080
 USER a3
 ENTRYPOINT ["a3-server"]
