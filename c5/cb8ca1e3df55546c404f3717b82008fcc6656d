@@ -1,0 +1,16 @@
+docs/INSTALL.md
+  h_f34b8ecec6a1c4 61-79
+web/src/views/SetupGuideView.vue
+  h_f34b8ecec6a1c4 54,56-80,105-109,195-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c5cb8ca1e3df55546c404f3717b82008fcc6656d",
+  "prompts": {},
+  "humans": {
+    "h_f34b8ecec6a1c4": {
+      "author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
