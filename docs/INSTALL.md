@@ -77,6 +77,13 @@ curl http://aa.bb.com:12345/install.sh | sh
 装完正常写代码即可。控制台「设备」页很快能看到这台机器，会话/告警逐步出现；
 如果某条高危命令被拦截，Claude Code 里会有中文提示，照着换命令就行。
 
+> **macOS 15（Sequoia）注意**：系统对局域网访问强制按应用授权。装常驻服务后首次连内网服务端，
+> 请打开 **系统设置 → 隐私与安全性 → 本地网络**，允许 **A3Agent**——否则系统会按本地网络权限
+> 静默拒绝连接的这台机器（设备会在控制台显示「注册后在线几分钟又离线」）。此项与代理/DNS 无关，
+> 授权前属正常现象，授权后数秒内自动恢复在线。若已授权仍离线，采集器自带**自愈看门狗**：每 10 秒探测，
+> 连续「路由不可达」约 3 分钟（`A3_SELF_HEAL_UNREACHABLE_SECONDS` 可调，0 关闭）后主动退出，
+> 常驻守护自动以新上下文重拉，断网缓存中的数据续传不丢——日志会打印处理指引。
+
 **Windows**：脚本暂不支持自动安装，按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）。
 以下命令请在 **cmd（命令提示符）** 中执行；若使用 PowerShell，把 `%USERPROFILE%` 换成 `$env:USERPROFILE`：
 
@@ -126,8 +133,10 @@ macOS 系统 openssl 无 ed25519 验签能力，安装时降级为显式警告 +
 ~/.a3/bin/a3-agent doctor            # 回退后复检签名与安装状态
 ```
 
-升级后若常驻服务在运行，需重启它（macOS `launchctl kickstart -k gui/$(id -u)/com.a3.agent`；
-Linux `systemctl --user restart a3-agent`）新版本才生效。
+升级后若常驻服务在运行，需重启采集进程新版本才生效：
+macOS 15 执行 `pkill -f "a3-agent run"`（2 分钟内自动重拉，或立即 `open -g ~/.a3/A3Agent.app --args run`）；
+macOS 14 及以下执行 `launchctl kickstart -k gui/$(id -u)/com.a3.agent`；
+Linux 执行 `systemctl --user restart a3-agent`。
 
 ---
 
@@ -141,5 +150,6 @@ Linux `systemctl --user restart a3-agent`）新版本才生效。
 | 安装命令提示签名校验失败 | 产物被篡改或下载不完整：重跑安装命令；若服务端产物目录刚被改动过，让管理员重启服务端重新发布（产物改动后签名拒不刷新，属正常防护） |
 | 安装命令提示需携带既有 Token | 这台机器之前登记过：重装会自动复用原身份；Token 丢了就找管理员在控制台「设备」页「换发 Token」并把新 Token 发给你（换发后旧 Token 立即失效） |
 | 被拦的命令是误报 | 找管理员在「规则」页停用或调整对应规则，改动即时生效 |
+| macOS 15 装好后设备一直离线/连不上内网服务端 | 系统「本地网络」权限未授权：打开系统设置 → 隐私与安全性 → 本地网络，允许 A3Agent，然后执行 `open -g ~/.a3/A3Agent.app --args run`（或等 2 分钟自动重拉）。若已授权仍离线（日志见「路由不可达」提示），说明常驻上下文仍被系统拦死：强制 `pkill -f "a3-agent run"` 让守护按新上下文重拉，或约 3 分钟自愈看门狗自动处理 |
 
 更详细的配置项、架构与隐私说明见 [README](../README.md)。

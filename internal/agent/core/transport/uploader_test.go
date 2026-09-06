@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -321,4 +326,37 @@ func TestHeartbeatPostsBacklogAndClassifiesFailures(t *testing.T) {
 		require.ErrorAs(t, heartbeatErr, &nonRetryableErr)
 		assert.Equal(t, http.StatusUnauthorized, nonRetryableErr.StatusCode)
 	})
+}
+
+func TestIsRoutedUnreachable(t *testing.T) {
+	unreachableOp := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: &os.SyscallError{Syscall: "connect", Err: syscall.EHOSTUNREACH},
+	}
+	// 透过 url.Error 多层包装后仍应识别
+	wrapped := fmt.Errorf("心跳请求发送失败: %w", &url.Error{Op: "Post", URL: "http://x", Err: unreachableOp})
+	if !IsRoutedUnreachable(wrapped) {
+		t.Fatalf("expected EHOSTUNREACH chain to be classified as routed-unreachable")
+	}
+
+	// 非不可达：拒绝
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: &os.SyscallError{Syscall: "connect", Err: syscall.ECONNREFUSED}}
+	if IsRoutedUnreachable(fmt.Errorf("x: %w", refused)) {
+		t.Fatalf("ECONNREFUSED must NOT be classified as routed-unreachable")
+	}
+
+	// 普通错误
+	if IsRoutedUnreachable(errors.New("普通错误")) {
+		t.Fatalf("普通错误不得判为路由不可达")
+	}
+	if IsRoutedUnreachable(nil) {
+		t.Fatalf("nil 不得判为路由不可达")
+	}
+
+	// 超时
+	timeoutOp := &net.OpError{Op: "dial", Net: "tcp", Err: &os.SyscallError{Syscall: "connect", Err: syscall.ETIMEDOUT}}
+	if IsRoutedUnreachable(timeoutOp) {
+		t.Fatalf("ETIMEDOUT 不得判为路由不可达")
+	}
 }

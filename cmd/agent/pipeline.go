@@ -148,13 +148,36 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	heartbeatDone := make(chan struct{})
 	go heartbeatLoop(ctx, uploaderClient, spoolQueue, agentConfig.HeartbeatInterval, logger, heartbeatDone)
 
+	// 自愈看门狗：持续「路由不可达」（macOS 15 本地网络权限等系统层拦截）时提示授权并在
+	// 超窗后请求退出，让常驻守护以新上下文重启。仅信号注入，不直接 kill 自身。
+	serverHost, serverPort := parseServerHostPort(agentConfig.ServerURL)
+	selfHealActive := serverHost != "" && agentConfig.UnreachableWindow > 0
+	triggerSelfHeal := make(chan struct{}, 1)
+	var selfHealReport = &selfHealReport{}
+	if selfHealActive {
+		// 授权强调用应用包装路径：仅在 macOS 15 安装的服务装配过 .app 才存在
+		appBundle := appBundlePathFor(homeDir)
+		go selfHealLoop(ctx, serverHost, serverPort, agentConfig.UnreachableWindow, logger, triggerSelfHeal, selfHealReport, appBundle, probeRoutedUnreachable)
+	}
+
 	logger.Info("a3 终端采集器已启动",
 		slog.String("server", agentConfig.ServerURL),
 		slog.Int("batch_size", agentConfig.BatchSize),
 		slog.Bool("mask_enabled", agentConfig.MaskEnabled))
 
-	<-ctx.Done()
-	logger.Info("收到退出信号，开始优雅关闭")
+	selfHealTriggered := false
+	select {
+	case <-ctx.Done():
+	case <-triggerSelfHeal:
+		if selfHealReport.selfExitTriggered {
+			logger.Error("自愈看门狗已触发，开始优雅关闭并于退出时返回非零码（等待守护重启）")
+		} else {
+			// 未真正到阈值（非首触发路径）——仅接收到信号，走正常提示即可
+			logger.Warn("收到自愈看门狗信号，触发退出流程")
+		}
+		selfHealTriggered = selfHealReport.selfExitTriggered
+	}
+	logger.Info("收到退出指令，开始优雅关闭")
 	stopOnSignal()
 
 	for _, tailWorker := range activeTailers {
@@ -181,6 +204,11 @@ func runPipeline(agentConfig core.Config, logger *slog.Logger) int {
 	case <-time.After(2 * time.Second):
 	}
 	logger.Info("a3 终端采集器已退出")
+	if selfHealTriggered {
+		// 非零退出码交给常驻守护（launchd StartInterval / systemd Restart=on-failure）
+		// 判定需要重启；数据已在断网缓存中，续传不丢失。
+		return 2
+	}
 	return 0
 }
 

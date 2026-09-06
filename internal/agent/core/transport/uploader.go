@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"syscall"
 	"time"
 
 	"github.com/codingway-hub/a3/internal/agent/core"
@@ -295,6 +297,39 @@ func (uploader *Uploader) marshalEnvelope(events []schema.Event) ([]byte, error)
 		return nil, fmt.Errorf("序列化事件批次失败: %w", marshalErr)
 	}
 	return requestBody, nil
+}
+
+// IsRoutedUnreachable 判断错误是否属「路由不可达」类：connect() 被操作系统在路由/网络
+// 层直接拒绝（EHOSTUNREACH/ENETUNREACH，对应 "no route to host" / "network is unreachable"），
+// 而非端口拒绝、超时或服务端 4xx/5xx。
+//
+// 这是自愈看门狗锁定的精确信号：它意味着操作系统根本不给这次拨号放行（典型如 macOS 15 的
+// 本地网络权限拒绝），单纯退避重试永不自愈——必须换拉起上下文或请求授权才能恢复。其余一切
+// 失败（拒绝、超时、瞬时断网）都不属于此类，按既有退避/缓存逻辑照常处理。
+func IsRoutedUnreachable(reportError error) bool {
+	var opErr *net.OpError
+	if !errors.As(reportError, &opErr) {
+		return false
+	}
+	return isUnreachableSyscall(opErr)
+}
+
+// isUnreachableSyscall 递归下钻 net.OpError 的错误链，判定是否路由不可达系统错误。
+func isUnreachableSyscall(opErr *net.OpError) bool {
+	var syscallErr syscall.Errno
+	if errors.As(opErr, &syscallErr) {
+		switch syscallErr {
+		case syscall.EHOSTUNREACH, syscall.ENETUNREACH:
+			return true
+		}
+		return false
+	}
+	// 递归：错误链中间层（如 url.Error 包 net.OpError）需要逐层下钻
+	var nested *net.OpError
+	if errors.As(opErr, &nested) && nested != opErr {
+		return isUnreachableSyscall(nested)
+	}
+	return false
 }
 
 // attemptOnce 执行单次上报尝试；返回 (结果, nil) 成功、(零值, nil) 不可能、(零值, err) 失败，

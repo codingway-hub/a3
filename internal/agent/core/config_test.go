@@ -66,16 +66,17 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 	baseConfig := Default("/Users/demo")
 
 	envMap := map[string]string{
-		"A3_SERVER_URL":                 "http://127.0.0.1:18080",
-		"A3_DEVICE_TOKEN":               "a3d_abc123",
-		"A3_BATCH_SIZE":                 "50",
-		"A3_FLUSH_INTERVAL":             "5",
-		"A3_HEARTBEAT_INTERVAL_SECONDS": "45",
-		"A3_MASK_ENABLED":               "false",
-		"A3_INSECURE_SKIP_TLS_VERIFY":   "true",
-		"A3_LOG_LEVEL":                  "debug",
-		"A3_SPOOL_MAX_BYTES":            "268435456",
-		"A3_SPOOL_QUARANTINE_MAX_BYTES": "67108864",
+		"A3_SERVER_URL":                       "http://127.0.0.1:18080",
+		"A3_DEVICE_TOKEN":                     "a3d_abc123",
+		"A3_BATCH_SIZE":                       "50",
+		"A3_FLUSH_INTERVAL":                   "5",
+		"A3_HEARTBEAT_INTERVAL_SECONDS":       "45",
+		"A3_SELF_HEAL_UNREACHABLE_SECONDS":    "240",
+		"A3_MASK_ENABLED":                     "false",
+		"A3_INSECURE_SKIP_TLS_VERIFY":         "true",
+		"A3_LOG_LEVEL":                        "debug",
+		"A3_SPOOL_MAX_BYTES":                  "268435456",
+		"A3_SPOOL_QUARANTINE_MAX_BYTES":       "67108864",
 	}
 	baseConfig.ApplyEnv(func(envName string) string { return envMap[envName] })
 
@@ -84,6 +85,7 @@ func TestApplyEnvOverridesOnlySetVariables(t *testing.T) {
 	assert.Equal(t, 50, baseConfig.BatchSize)
 	assert.Equal(t, 5*time.Second, baseConfig.FlushInterval)
 	assert.Equal(t, 45*time.Second, baseConfig.HeartbeatInterval, "A3_HEARTBEAT_INTERVAL_SECONDS 应解析为秒")
+	assert.Equal(t, 240*time.Second, baseConfig.UnreachableWindow, "A3_SELF_HEAL_UNREACHABLE_SECONDS 应解析为秒")
 	assert.False(t, baseConfig.MaskEnabled)
 	assert.True(t, baseConfig.InsecureTLS)
 	assert.Equal(t, "debug", baseConfig.LogLevel)
@@ -136,6 +138,35 @@ func TestHeartbeatIntervalEnvSemantics(t *testing.T) {
 	require.Error(t, partial.Validate(), "低于下限应被 Validate 拒绝")
 
 	require.NoError(t, apply("0").Validate(), "关闭心跳属合法配置（靠事件上报维持在线态）")
+}
+
+// TestSelfHealWindowEnvSemantics 自愈看门狗窗口环境变量语义：
+// 默认用 DefaultSelfHealWindow；0 禁用；非法值保留默认；低于下限的正数交由 Validate 拒绝。
+func TestSelfHealWindowEnvSemantics(t *testing.T) {
+	defaultWithURL := Default("/Users/demo")
+	defaultWithURL.ServerURL = "http://127.0.0.1:8080"
+	assert.Equal(t, DefaultSelfHealWindow, defaultWithURL.UnreachableWindow, "默认窗口")
+
+	apply := func(envValue string) Config {
+		config := defaultWithURL
+		config.ApplyEnv(func(envName string) string {
+			if envName == "A3_SELF_HEAL_UNREACHABLE_SECONDS" {
+				return envValue
+			}
+			return ""
+		})
+		return config
+	}
+
+	assert.Equal(t, DefaultSelfHealWindow, apply("not-a-number").UnreachableWindow, "非法值保留默认")
+	assert.Equal(t, time.Duration(0), apply("0").UnreachableWindow, "显式 0 禁用看门狗")
+	assert.Equal(t, 10*time.Second, apply("10").UnreachableWindow, "语法合法的短窗口先透传")
+
+	short := apply("10")
+	assert.Equal(t, 10*time.Second, short.UnreachableWindow, "低于下限先透传由 Validate 拒绝")
+	require.Error(t, short.Validate(), "低于下限应被 Validate 拒绝")
+
+	require.NoError(t, apply("0").Validate(), "禁用看门狗属合法配置")
 }
 
 func TestPluginsSelectionAndValidation(t *testing.T) {

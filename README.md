@@ -40,7 +40,17 @@ a3 由两部分组成：**装在开发机上的采集器**（记录 + 把关）�
 curl http://<服务端地址>/install.sh | sh
 ```
 
-装完就正常开工（想确认装没装好，随时 `~/.a3/bin/a3-agent doctor` 一键自检，全绿即就绪；没有子命令直接敲 `a3-agent` 也等价于此）。三站跑通后采集器开始后台工作：Claude Code / Codex 的每一次对话、每一次工具调用都会自动记录；
+装完就正常开工（想确认装没装好，随时 `~/.a3/bin/a3-agent doctor` 一键自检，全绿即就绪；没有子命令直接敲 `a3-agent` 也等价于此）。
+
+> **macOS 15（Sequoia）用户请看**：系统对局域网访问按应用强制授权。装常驻服务后首次连内网服务端，
+> 需在 **系统设置 → 隐私与安全性 → 本地网络** 允许 **A3Agent**，否则系统会静默拒绝这台采集器的联网
+> （设备在控制台会显示「注册后在线几分钟又离线」）。授权一次永久生效，与代理无关。
+>
+> 若已授权仍持续离线，说明常驻进程的拉起上下文仍被系统拦死：采集器自带**自愈看门狗**，每 10 秒探测一次，
+> 连续「路由不可达」约 3 分钟（`A3_SELF_HEAL_UNREACHABLE_SECONDS` 可调，0 关闭）后主动退出，
+> 常驻守护自动以新上下文重拉，断网缓存中的数据续传不丢——日志会打印对应提示与处理指引。
+
+三站跑通后采集器开始后台工作：Claude Code / Codex 的每一次对话、每一次工具调用都会自动记录；
 其中高危操作按规则在**发生前**被拦下（拦截目前仅对 Claude Code 生效，Codex 只审计不拦截）。
 
 日常里「a3 站出来亮相」只有三种情况：
@@ -145,7 +155,8 @@ docker compose up -d --build
 
 服务端默认开启采集器**发布签名**：安装脚本内嵌服务端签名公钥与指纹，下载产物后验签通过才执行落位，
 升级安装（重跑 `curl .../install.sh | sh`）原子替换安装字节并保留上一版 `~/.a3/bin/a3-agent.prev`，
-出问题用 `"$HOME/.a3/bin/a3-agent" rollback` 一键回退（回滚不动常驻服务字节，需重启常驻服务生效）。
+出问题用 `"$HOME/.a3/bin/a3-agent" rollback` 一键回退（回滚不动常驻服务字节，升级/回滚后重启采集进程生效：
+macOS 15 执行 `pkill -f "a3-agent run"`，macOS 14 及以下执行 `launchctl kickstart -k`，Linux 执行 `systemctl --user restart a3-agent`）。
 
 - **验签能力分层**：Linux 的 OpenSSL 3 支持 ed25519 验签——安装期内联 `openssl pkeyutl -verify`，
   校验失败立即终止、绝不执行未验证字节；macOS 系统 openssl 为 LibreSSL 无 ed25519 支持，安装期降级为
@@ -184,6 +195,7 @@ export A3_DEVICE_TOKEN=a3d_xxx           # 注册成功时下发，仅此一次�
 | `A3_BATCH_SIZE` | 上报批大小（上限 500，超限服务端整批拒绝） | 200 |
 | `A3_FLUSH_INTERVAL` | 批量化冲刷间隔（秒） | 2s |
 | `A3_HEARTBEAT_INTERVAL_SECONDS` | 常驻心跳周期（秒，下限 5）；心跳刷新设备在线态并上报断网缓存积压（控制台「数据滞留」判定）；≤0 关闭（仅靠事件上报维持在线） | 30 |
+| `A3_SELF_HEAL_UNREACHABLE_SECONDS` | 自愈看门狗：服务端持续「路由不可达」（macOS 15 本地网络权限等系统层拦截）秒数，下限 30；到达后主动退出让常驻守护以新上下文重启，断网缓存续传不丢；≤0 关闭 | 180 |
 | `A3_MASK_ENABLED` | 敏感片段脱敏开关 | `true` |
 | `A3_INSECURE_SKIP_TLS_VERIFY` | 跳过证书校验(自签名) | `false` |
 | `A3_LOG_LEVEL` | debug/info/warn/error | `info` |

@@ -81,7 +81,11 @@ func rollbackCommand(flagArguments []string) int {
 	}
 
 	fmt.Println("✅ 已回滚到上一版本（a3-agent.prev → a3-agent）")
-	fmt.Println("   若常驻服务在运行，重启后生效（macOS: launchctl kickstart -k gui/$(id -u)/com.a3.agent；Linux: systemctl --user restart a3-agent）")
+	if needsLocalNetworkApp() {
+		fmt.Println("   重启采集进程后新版本生效：pkill -f \"a3-agent run\"（2 分钟内自动重拉），或 open -g ~/.a3/A3Agent.app --args run")
+	} else {
+		fmt.Println("   若常驻服务在运行，重启后生效（macOS: launchctl kickstart -k gui/$(id -u)/com.a3.agent；Linux: systemctl --user restart a3-agent）")
+	}
 	fmt.Printf("   验证: \"%s\" doctor\n", agentPath)
 	return 0
 }

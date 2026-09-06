@@ -26,6 +26,14 @@ const DefaultHeartbeatInterval = 30 * time.Second
 // 也放大了数据库写放大（每拍一写）。
 const heartbeatIntervalFloorSeconds = 5
 
+// DefaultSelfHealWindow 自愈看门狗默认窗口：连续「路由不可达」超过该时长即触发自愈
+// （授权提示 + 主动退出让守护重新拉起）。默认值按心跳间隔的若干倍取整，覆盖一次授权
+// 决策所需的时间窗口，同时避免对偶发不可达过度敏感。
+const DefaultSelfHealWindow = 3 * time.Minute
+
+// selfHealWindowFloorSeconds 窗口下限：过短会把瞬时路由问题误判为需要自杀。
+const selfHealWindowFloorSeconds = 30
+
 // Config 终端采集器运行配置；CLI flag 优先级高于环境变量，环境变量高于默认值。
 type Config struct {
 	ServerURL               string        // 服务端地址（http/https）
@@ -41,6 +49,12 @@ type Config struct {
 	InsecureTLS             bool          // 跳过 TLS 证书校验（仅自签名单机部署场景使用）
 	LogLevel                string        // 日志级别：debug|info|warn|error
 	Plugins                 []string      // 启用的插件名列表；[all] 表示全部内置插件（默认）
+
+	// 自愈看门狗：当服务端长时间判定为「路由不可达」（EHOSTUNREACH/ENETUNREACH——典型的
+	// macOS 15 本地网络权限拒绝，重试不会自愈）而非普通断网/拒绝时，周期唤醒触发授权提示，
+	// 并在持续超时后主动退出以让常驻守护（launchd StartInterval / systemd Restart）以
+	// 新上下文拉起。仅监听「路由不可达」这一不可自愈信号，其余失败照常退避缓存，绝不动。
+	UnreachableWindow time.Duration // 触发自愈的连续不可达窗口；0=默认（见 DefaultSelfHealWindow）
 }
 
 // Default 返回基于用户主目录推导的默认配置。
@@ -58,6 +72,7 @@ func Default(homeDir string) Config {
 		InsecureTLS:       false,
 		LogLevel:          "info",
 		Plugins:           []string{PluginAll},
+		UnreachableWindow: DefaultSelfHealWindow,
 	}
 }
 
@@ -103,6 +118,11 @@ func (config *Config) ApplyEnv(getenv func(string) string) {
 			} else {
 				config.HeartbeatInterval = time.Duration(heartbeatSeconds) * time.Second
 			}
+		}
+	}
+	if unreachableWindowText := getenv("A3_SELF_HEAL_UNREACHABLE_SECONDS"); unreachableWindowText != "" {
+		if unreachableSeconds, parseErr := strconv.Atoi(unreachableWindowText); parseErr == nil && unreachableSeconds >= 0 {
+			config.UnreachableWindow = time.Duration(unreachableSeconds) * time.Second
 		}
 	}
 	if maskText := getenv("A3_MASK_ENABLED"); maskText != "" {
@@ -184,6 +204,10 @@ func (config Config) Validate() error {
 	// ≤0 由调用方视为「关闭心跳」（仅靠事件上报维持在线态），不做报错
 	if config.HeartbeatInterval > 0 && config.HeartbeatInterval < heartbeatIntervalFloorSeconds*time.Second {
 		return fmt.Errorf("heartbeat_interval 过短: %s（至少 %ds，避免高频空转）", config.HeartbeatInterval, heartbeatIntervalFloorSeconds)
+	}
+	// 自愈看门狗窗口：>0 时校验下限，避免瞬态误杀
+	if config.UnreachableWindow > 0 && config.UnreachableWindow < selfHealWindowFloorSeconds*time.Second {
+		return fmt.Errorf("self_heal_unreachable_window 过短: %s（至少 %ds）", config.UnreachableWindow, selfHealWindowFloorSeconds)
 	}
 	switch config.LogLevel {
 	case "debug", "info", "warn", "error":
