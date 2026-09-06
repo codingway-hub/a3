@@ -1,0 +1,18 @@
+.gitattributes
+  h_f34b8ecec6a1c4 1-11
+internal/server/api/installer/install.sh.tmpl
+  h_f34b8ecec6a1c4 21,30,100,103,106
+internal/server/api/installer/installer.go
+  h_f34b8ecec6a1c4 79-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "f5ffa05daf664cd1cb7f6dcfcbb0b21eff12d317",
+  "prompts": {},
+  "humans": {
+    "h_f34b8ecec6a1c4": {
+      "author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
