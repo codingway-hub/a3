@@ -1,0 +1,93 @@
+cmd/agent/service_test.go
+  s_8301e3490dd7cb::t_f9aab0791cda0f 73
+  s_8301e3490dd7cb::t_935f7217665fda 14
+  s_8301e3490dd7cb::t_39daeea9f645f3 44
+  s_8301e3490dd7cb::t_2ff2082bf2a2bb 96-198
+internal/agent/core/config_test.go
+  s_8301e3490dd7cb::t_b99e73427517bf 69-79,88
+  s_8301e3490dd7cb::t_7e74bcf8c9101c 143-171
+cmd/agent/selfheal.go
+  s_8301e3490dd7cb::t_c823cae4fa5952 112,114
+  s_8301e3490dd7cb::t_82080213e16f52 145,147
+  s_8301e3490dd7cb::t_e0accff889715e 53-54
+  s_8301e3490dd7cb::t_5957bed1e3efe8 166-167,171,173-186
+  s_8301e3490dd7cb::t_48f8cafa823120 92-96
+  s_8301e3490dd7cb::t_56d2659e755b5a 153-155
+  s_8301e3490dd7cb::t_bd7fb4822bd256 120-122
+  s_8301e3490dd7cb::t_d926185d355f2f 98,103
+  s_8301e3490dd7cb::t_ba5662e8a96e4a 75
+  s_8301e3490dd7cb::t_59ab41dbae5914 20-25,27-30
+  s_8301e3490dd7cb::t_35c67e60a2329f 7-8
+  s_8301e3490dd7cb::t_0f8050d691ed17 9
+  s_8301e3490dd7cb::t_e4fa9e8d126edd 16-19,32,38,41,44-46,49-51,65,78,86,97,99-102,108,110-111,113,115-117,119,128-129,140-141,143-144,146,149-150,152,156-158,160-162
+  s_8301e3490dd7cb::t_ee2e4bb4806ec4 168-170,172
+  s_8301e3490dd7cb::t_74a944d64ebd46 1-6,10-15,26,31,33-37,39-40,42-43,47-48,52,55-64,66-74,76-77,79-85,87-91,104-107,109,118,123-127,130-139,142,148,151,159,163-165
+internal/agent/core/transport/uploader_test.go
+  s_8301e3490dd7cb::t_69db2222810c3c 7-8,11-12,14
+  s_8301e3490dd7cb::t_7559113c84e8e2 330-362
+internal/agent/core/config.go
+  s_8301e3490dd7cb::t_4b9bcb65612138 208-211
+  s_8301e3490dd7cb::t_8d0300468abc46 52-56
+  s_8301e3490dd7cb::t_ee2fc1dad2e7a0 57
+  s_8301e3490dd7cb::t_d653f340021e16 123-127
+  s_8301e3490dd7cb::t_470f954bc23d2b 29-36
+  s_8301e3490dd7cb::t_caeb863a144a39 75
+docs/ROADMAP.md
+  s_8301e3490dd7cb::t_10ed50afa662b7 17
+  s_8301e3490dd7cb::t_30a155b606f761 16
+  s_8301e3490dd7cb::t_812d26e941bbe5 5
+internal/agent/core/transport/uploader.go
+  s_8301e3490dd7cb::t_b489ce257b33d2 14,16
+  s_8301e3490dd7cb::t_1855c35ea65ae0 302-334
+cmd/agent/rollback.go
+  s_8301e3490dd7cb::t_60a9561b2a5893 84-88
+cmd/agent/main.go
+  s_8301e3490dd7cb::t_e72c5511d482f8 124
+README.md
+  s_8301e3490dd7cb::t_b30d5a412670fd 48-51
+  s_8301e3490dd7cb::t_b0848f4a0443ba 43-47,52-53
+  s_8301e3490dd7cb::t_3309821de01b99 158-159
+  s_8301e3490dd7cb::t_6bd53e3d6cdb02 198
+cmd/agent/selfheal_test.go
+  s_8301e3490dd7cb::t_09f13b95eafa29 1-6,8-43,51-56,117,119,122,124,131
+  s_8301e3490dd7cb::t_87b22acc04cb01 7,44-50,57-116,118,120-121,123,125-130
+cmd/agent/service.go
+  s_8301e3490dd7cb::t_ab075351b8355c 267-271
+  s_8301e3490dd7cb::t_6e6913988d8721 300-302
+  s_8301e3490dd7cb::t_17e56865ea8b53 368-375,377-398
+  s_8301e3490dd7cb::t_0cab3e34173a05 64,66-71,73
+  s_8301e3490dd7cb::t_81bebb7556c84e 10
+  s_8301e3490dd7cb::t_d5aa7746d93b17 21-27
+  s_8301e3490dd7cb::t_90f921d1b9f894 111-112,114-120,123,136-143,147-230
+  s_8301e3490dd7cb::t_aa4f86b4474614 40-63,65,72,74-79
+  s_8301e3490dd7cb::t_25be04dd75368e 376
+  s_8301e3490dd7cb::t_f8648cbdea0630 231
+docs/INSTALL.md
+  s_8301e3490dd7cb::t_ce1258d7cd8718 136-139
+  s_8301e3490dd7cb::t_a4412f2c2a2507 83-85
+  s_8301e3490dd7cb::t_854f8aeb0459c8 80-82,86
+  s_8301e3490dd7cb::t_f0805359d068bf 153
+cmd/agent/pipeline.go
+  s_8301e3490dd7cb::t_a2c8dec7f2942f 160
+  s_8301e3490dd7cb::t_e9341d60407808 158-159
+  s_8301e3490dd7cb::t_6e5eefe3ec0c94 207-211
+  s_8301e3490dd7cb::t_9958784a14b68a 151-157,161-162,168-180
+internal/server/api/installer/install.sh.tmpl
+  s_8301e3490dd7cb::t_4d50b897a1bce5 198-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "4d90f07f96c076b33b68a1362ebe0cb760d76121",
+  "prompts": {},
+  "sessions": {
+    "s_8301e3490dd7cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8949eb88-5ed0-4b51-b609-5cb14f9ff302",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
