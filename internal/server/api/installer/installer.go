@@ -76,7 +76,9 @@ func RenderInstallScript(serverBaseURL string, signPub ed25519.PublicKey) (strin
 	if executeErr := shellTemplate.Execute(&scriptBuilder, templateData); executeErr != nil {
 		return "", executeErr
 	}
-	return scriptBuilder.String(), nil
+	// 行尾规范化：Windows 检出（git autocrlf）可能把模板 embed 成 CRLF，
+	// 渲染出的脚本在 POSIX sh 下会因 set -eu\r 之类行尾残留而崩溃，统一输出 LF。
+	return strings.ReplaceAll(scriptBuilder.String(), "\r\n", "\n"), nil
 }
 
 // shellQuote 单引号包裹并翻倍内部单引号，供把配置/推导值安全嵌入 shell 脚本赋值——

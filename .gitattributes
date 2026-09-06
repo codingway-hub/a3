@@ -1,0 +1,11 @@
+# 强制 shell 脚本与模板统一 LF：Windows 检出（git autocrlf）会把行尾转成 CRLF，
+# 渲染出的 install.sh 在 POSIX sh 下因 set -eu\r 等行尾残留崩溃，故一律禁止转换。
+*.sh      text eol=lf
+*.tmpl    text eol=lf
+*.go      text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+Makefile  text eol=lf
+Dockerfile* text eol=lf
