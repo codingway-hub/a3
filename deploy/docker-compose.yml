@@ -1,4 +1,4 @@
-# a3 单机一体化部署：PostgreSQL + 服务端(含审计台静态资源与内嵌迁移)。
+# a3 服务端编排：PostgreSQL + 服务端(含审计台静态资源与内嵌迁移)。
 # 用法：
 #   cp deploy/.env.example deploy/.env    # 设置管理员口令等
 #   docker compose -f deploy/docker-compose.yml up -d --build

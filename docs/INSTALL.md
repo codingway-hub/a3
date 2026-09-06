@@ -7,13 +7,32 @@
 
 ## 一、装服务端（管理员做一次）
 
-需要：一台装了 Docker 的机器（Linux/macOS 均可）。
+需要：一台装了 Docker 的机器（Linux/macOS/Windows 均可），Docker Compose v2。
 
 ```bash
 # 拿到代码
 git clone <仓库地址> && cd a3
+```
 
-# 一条命令装好（把地址换成这台机器对外的地址）
+**Linux / macOS 启动**：
+
+```bash
+cp deploy/.env.example deploy/.env     # 编辑 A3_ADMIN_PASSWORD 等配置
+make compose-up                        # 构建镜像并拉起 postgres + server
+```
+
+**Windows 启动**（在 `deploy` 目录下执行，或加 `-f deploy/docker-compose.yml`）：
+
+```bat
+copy ..\deploy\.env.example deploy\.env
+docker compose up -d --build
+```
+
+**停止**：Linux/macOS 用 `make compose-down`，Windows 用 `docker compose down`。
+
+也可以一条命令自动完成配置与启动（把地址换成这台机器对外的地址）：
+
+```bash
 ./deploy/install-server.sh http://aa.bb.com:12345
 ```
 
@@ -58,11 +77,12 @@ curl http://aa.bb.com:12345/install.sh | sh
 装完正常写代码即可。控制台「设备」页很快能看到这台机器，会话/告警逐步出现；
 如果某条高危命令被拦截，Claude Code 里会有中文提示，照着换命令就行。
 
-**Windows**：脚本暂不支持自动安装，按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）：
+**Windows**：脚本暂不支持自动安装，按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）。
+以下命令请在 **cmd（命令提示符）** 中执行；若使用 PowerShell，把 `%USERPROFILE%` 换成 `$env:USERPROFILE`：
 
 1. 从指南页的下载链接获取 `a3-agent-windows-amd64.exe`，重命名为 `a3-agent.exe`，
    放入 `%USERPROFILE%\.a3\bin`（目录不存在则新建）。
-2. 打开 cmd 或 PowerShell，注册设备（按提示粘贴管理员下发的安装凭据并回车提交）：
+2. 打开 cmd，注册设备（按提示粘贴管理员下发的安装凭据并回车提交）：
 
    ```bat
    %USERPROFILE%\.a3\bin\a3-agent.exe register --server http://<服务端地址>:<端口>

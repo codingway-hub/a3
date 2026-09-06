@@ -42,7 +42,7 @@ smoke-agent:
 offline-drill:
 	A3_SMOKE_BASE="$(A3_SMOKE_BASE)" A3_ADMIN_PASSWORD="$(A3_ADMIN_PASSWORD)" bash scripts/offline-drill.sh
 
-# 单机一体化部署：构建镜像并拉起 postgres+server（需先 cp deploy/.env.example deploy/.env）。
+# 服务端部署：构建镜像并拉起 postgres+server（需先 cp deploy/.env.example deploy/.env）。
 compose-up:
 	docker compose -f $(DOCKER_COMPOSE_FILE) up -d --build
 

@@ -80,12 +80,21 @@ curl http://<服务端地址>/install.sh | sh
 
 ## 部署
 
-### 单机一体化（个人 / 小团队快速跑起来）
+只有一套启动方式：服务端用 Docker Compose 拉起 postgres + server，采集器照接入指南安装。
+
+**Linux / macOS**：
 
 ```bash
 cp deploy/.env.example deploy/.env     # 1. 编辑 A3_ADMIN_PASSWORD 等配置
 make compose-up                        # 2. 构建镜像并拉起 postgres + server
 # 3. 浏览器打开 http://127.0.0.1:8080 ，用 .env 中的管理员账号登录
+```
+
+**Windows**（在 `deploy` 目录下执行，或加 `-f deploy/docker-compose.yml`）：
+
+```bat
+copy ..\deploy\.env.example deploy\.env
+docker compose up -d --build
 ```
 
 或一条命令自动完成上述配置与启动（地址换成对外地址；口令留空自动生成、非回环地址自动开放监听）：
@@ -97,7 +106,7 @@ make compose-up                        # 2. 构建镜像并拉起 postgres + ser
 > 新设备登记需**凭据门禁**：管理员登录控制台后在「安装凭据」页生成一次性凭据（限时限次、可吊销，
 > 明文仅生成时出现一次）下发给待接入用户；用户照接入指南安装时按提示粘贴凭据，凭据不进命令行/URL/日志。
 
-停止与清理：`make compose-down`（数据保留在 docker volume `a3_pgdata`）。
+停止与清理：Linux/macOS 用 `make compose-down`，Windows 用 `docker compose down`（数据保留在 docker volume `a3_pgdata`）。
 
 > 注意：PostgreSQL 容器仅在**首次初始化**空数据卷时读取 `A3_POSTGRES_PASSWORD`；
 > 之后修改 `.env` 中的口令不会作用于已初始化的卷，需进入容器执行

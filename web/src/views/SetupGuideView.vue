@@ -51,7 +51,9 @@
 
       <h3>Windows 用户</h3>
       <p class="guide-note">
-        暂不支持脚本自动安装，请按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）：
+        暂不支持脚本自动安装，请按以下步骤手动完成（Windows 上为纯审计采集，暂不支持高危命令拦截 Hook）。
+        以下命令请在 <strong>cmd（命令提示符）</strong> 中执行；若使用 PowerShell，把
+        <code>%USERPROFILE%</code> 换成 <code>$env:USERPROFILE</code>。
       </p>
       <ol class="guide-steps windows-steps">
         <li>
