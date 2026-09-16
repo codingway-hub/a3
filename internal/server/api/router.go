@@ -38,17 +38,19 @@ type Router struct {
 	signatures      *agentSigner      // 采集器产物代际签名器；nil 表示未配置签名（install.sh 降级为不校验）
 	signPub         ed25519.PublicKey // 发布签名公钥（注入 install.sh / setup-info）
 	signFingerprint string            // 公钥 sha256 指纹（hex，供终端与管理员离带核对）
+	deviceTokenTTL  time.Duration     // 设备 Token 有效期；0 = 永久（默认）。注册与管理员换发落到期时间
 }
 
 // RouterConfig 是装配参数。
 type RouterConfig struct {
-	JWTSecret  string
-	WebDist    string
-	AgentDist  string
-	PublicURL  string
-	DeviceAPI  *ingest.Handler
-	Version    string
-	SigningKey ed25519.PrivateKey // 采集器发布签名私钥；nil 合法（未配置即 install.sh 不校验签名）
+	JWTSecret      string
+	WebDist        string
+	AgentDist      string
+	PublicURL      string
+	DeviceAPI      *ingest.Handler
+	Version        string
+	SigningKey     ed25519.PrivateKey // 采集器发布签名私钥；nil 合法（未配置即 install.sh 不校验签名）
+	DeviceTokenTTL time.Duration      // 设备 Token 有效期；0 = 永久（默认）
 }
 
 // NewRouter 构建装配器。
@@ -82,6 +84,7 @@ func NewRouter(eventStore *store.Store, alertService *alert.Service, routerConfi
 		signatures:      signer,
 		signPub:         signPublicKey,
 		signFingerprint: signFingerprint,
+		deviceTokenTTL:  routerConfig.DeviceTokenTTL,
 	}
 }
 
@@ -111,7 +114,7 @@ func (api *Router) Setup() *gin.Engine {
 	consoleGroup := engine.Group("/api/v1")
 	consoleGroup.POST("/auth/login", api.HandleLogin)
 	consoleGroup.GET("/setup-info", api.HandleSetupInfo)
-	protectedGroup := consoleGroup.Group("", auth.RequireJWT(api.jwtSecret))
+	protectedGroup := consoleGroup.Group("", auth.RequireJWT(api.jwtSecret, api.eventStore))
 	{
 		protectedGroup.GET("/auth/me", api.HandleMe)
 		protectedGroup.GET("/stats/overview", api.HandleStatsOverview)

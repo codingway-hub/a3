@@ -22,6 +22,10 @@ type Device struct {
 	AgentVersion       string
 	Plugins            []byte
 	Status             string
+	// TokenExpiresAt 设备 Token 到期时间；nil 表示永久有效（默认）。
+	// 部署方配置 A3_DEVICE_TOKEN_TTL_HOURS 后，注册/管理员换发时落到期时间，
+	// 鉴权中间件对过期 Token 一律 401。
+	TokenExpiresAt     *time.Time
 	FirstSeenAt        time.Time
 	LastSeenAt         time.Time
 	// SpoolPendingBatches / SpoolPendingBytes 最近一次心跳上报的终端带外积压
@@ -30,7 +34,7 @@ type Device struct {
 	SpoolPendingBytes   int64
 }
 
-const deviceColumns = `id, device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, first_seen_at, last_seen_at, spool_pending_batches, spool_pending_bytes`
+const deviceColumns = `id, device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, token_expires_at, first_seen_at, last_seen_at, spool_pending_batches, spool_pending_bytes`
 
 // 注册凭证哨兵错误：轮换 Token 必须证明持有既有凭证，杜绝仅凭指纹顶替他人设备。
 var (
@@ -39,6 +43,9 @@ var (
 	ErrCredentialRequired = errors.New("credential required")
 	// ErrCredentialMismatch 携带的凭证与设备既有 Token 不符。
 	ErrCredentialMismatch = errors.New("credential mismatch")
+	// ErrDeviceDisabled 指纹命中 issued 状态为 disabled 的设备：临时挂起、
+	// 身份保留、不可自助重注册，恢复仅管理员可操作。
+	ErrDeviceDisabled = errors.New("device disabled")
 )
 
 // CreateDevice 写入一台新设备；id/status/时间戳由数据库生成后回填。
@@ -50,11 +57,11 @@ func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 	}
 	normalizeFingerprint(device)
 	return store.pool.QueryRow(ctx,
-		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, token_expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, status, first_seen_at, last_seen_at`,
 		device.DeviceID, device.TokenHash, device.MachineFingerprint, device.Hostname, device.OS,
-		device.Arch, device.AgentVersion, device.Plugins,
+		device.Arch, device.AgentVersion, device.Plugins, device.TokenExpiresAt,
 	).Scan(&device.ID, &device.Status, &device.FirstSeenAt, &device.LastSeenAt)
 }
 
@@ -69,7 +76,9 @@ func (store *Store) CreateDevice(ctx context.Context, device *Device) error {
 //     进行，杜绝普通重复注册被利用无条件轮换顶替；设备身份不变（防顶替）；
 //   - 仅 revoked 历史行存在（指纹已释放）→ 直接新建 active 行，无需旧凭证——管理员
 //     吊销后令牌丢失的恢复路径；吊销旧行保留作为审计留痕（部分唯一索引下同指纹可
-//     并存 active/revoked）。
+//     并存 active/revoked）；
+//   - disabled 行存在（临时挂起）→ 拒绝自助重注册，返回 ErrDeviceDisabled——挂起
+//     不释放指纹，恢复仅管理员操作（重新 active），杜绝终端自我激活。
 //
 // 返回 (deviceID, created, error)：created=true 为新注册并已写入新 Token；
 // created=false 为凭据匹配复用（调用方不应下发新 Token，终端保留既有 Token）。
@@ -84,12 +93,13 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// 同一指纹可能并存 revoked 历史行与 active 行：优先取出 active，否则取最早登记行。
+	// 同一指纹可能并存 revoked/disabled 历史行与 active 行：优先取出 active 与 disabled
+	//（disabled 优先于 revoked——被挂起身份优先阻断自助重注册），否则取最早登记行。
 	var existingDeviceID, storedTokenHash, deviceStatus string
 	scanErr := tx.QueryRow(ctx,
 		`SELECT device_id, token_hash, status FROM devices
 		  WHERE machine_fingerprint = $1
-		  ORDER BY (status = 'active') DESC, first_seen_at ASC LIMIT 1
+		  ORDER BY (status = 'active') DESC, (status = 'disabled') DESC, first_seen_at ASC LIMIT 1
 		  FOR UPDATE`,
 		device.MachineFingerprint,
 	).Scan(&existingDeviceID, &storedTokenHash, &deviceStatus)
@@ -122,6 +132,12 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 		return existingDeviceID, false, tx.Commit(ctx)
 	}
 
+	// disabled 行（临时挂起）：身份保留、指纹未释放，禁止自助重注册/复用身份，
+	// 恢复仅管理员操作（置回 active）。此处仍以 401 语义拒绝——终端须经管理员处理。
+	if deviceStatus == "disabled" {
+		return "", false, ErrDeviceDisabled
+	}
+
 	// 仅剩 revoked 历史行：指纹已释放，直接注册新 active 行（管理员吊销后令牌
 	// 丢失的恢复路径，无需旧凭证）；吊销旧行保留审计留痕，部分唯一索引允许
 	// active/revoked 同指纹并存。
@@ -134,8 +150,9 @@ func (store *Store) RegisterDeviceAtomic(ctx context.Context,
 
 // RotateDeviceTokenWithAudit 管理员批准的设备 Token 轮换（普通重复注册不再轮换，
 // 本方法为唯一换发通道）：换哈希并同事务落 device_token_rotate 审计，后续须人工
-// 把新明文 Token 交给设备主；设备不存在返回 ErrNotFound。
-func (store *Store) RotateDeviceTokenWithAudit(ctx context.Context, deviceID string, newTokenHash string, operator string) error {
+// 把新明文 Token 交给设备主；expiresAt 为 nil 表示换发后永久有效（TTL 未配置时）。
+// 设备不存在或非 active 返回 ErrNotFound。
+func (store *Store) RotateDeviceTokenWithAudit(ctx context.Context, deviceID string, newTokenHash string, expiresAt *time.Time, operator string) error {
 	return store.withTx(ctx, func(tx pgx.Tx) error {
 		var beforeStatus string
 		scanErr := tx.QueryRow(ctx,
@@ -150,8 +167,8 @@ func (store *Store) RotateDeviceTokenWithAudit(ctx context.Context, deviceID str
 			return ErrNotFound // 仅 active 行可换发；已吊销设备走吊销后重注册
 		}
 		if _, execErr := tx.Exec(ctx,
-			`UPDATE devices SET token_hash = $2, last_seen_at = now() WHERE device_id = $1`,
-			deviceID, newTokenHash); execErr != nil {
+			`UPDATE devices SET token_hash = $2, token_expires_at = $3, last_seen_at = now() WHERE device_id = $1`,
+			deviceID, newTokenHash, expiresAt); execErr != nil {
 			return execErr
 		}
 		return appendAuditInTx(ctx, tx, AuditActionDeviceTokenRotate, auditTargetDevice, deviceID, operator,
@@ -166,11 +183,11 @@ func insertDeviceInTx(ctx context.Context, tx pgx.Tx, device *Device) error {
 	}
 	normalizeFingerprint(device)
 	return tx.QueryRow(ctx,
-		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO devices (device_id, token_hash, machine_fingerprint, hostname, os, arch, agent_version, plugins, status, token_expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id, status, first_seen_at, last_seen_at`,
 		device.DeviceID, device.TokenHash, device.MachineFingerprint, device.Hostname, device.OS,
-		device.Arch, device.AgentVersion, device.Plugins, device.Status,
+		device.Arch, device.AgentVersion, device.Plugins, device.Status, device.TokenExpiresAt,
 	).Scan(&device.ID, &device.Status, &device.FirstSeenAt, &device.LastSeenAt)
 }
 
@@ -223,7 +240,7 @@ func (store *Store) GetDeviceByTokenHash(ctx context.Context, tokenHash string) 
 		`SELECT `+deviceColumns+` FROM devices WHERE token_hash = $1`, tokenHash,
 	).Scan(&device.ID, &device.DeviceID, &device.TokenHash, &device.MachineFingerprint,
 		&device.Hostname, &device.OS, &device.Arch, &device.AgentVersion, &device.Plugins,
-		&device.Status, &device.FirstSeenAt, &device.LastSeenAt,
+		&device.Status, &device.TokenExpiresAt, &device.FirstSeenAt, &device.LastSeenAt,
 		&device.SpoolPendingBatches, &device.SpoolPendingBytes)
 	if errors.Is(scanErr, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -295,7 +312,7 @@ func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
 		var device Device
 		if scanErr := rows.Scan(&device.ID, &device.DeviceID, &device.TokenHash, &device.MachineFingerprint,
 			&device.Hostname, &device.OS, &device.Arch, &device.AgentVersion, &device.Plugins,
-			&device.Status, &device.FirstSeenAt, &device.LastSeenAt,
+			&device.Status, &device.TokenExpiresAt, &device.FirstSeenAt, &device.LastSeenAt,
 				&device.SpoolPendingBatches, &device.SpoolPendingBytes); scanErr != nil {
 			return nil, scanErr
 		}

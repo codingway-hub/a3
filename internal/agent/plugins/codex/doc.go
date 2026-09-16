@@ -1,8 +1,8 @@
 // Package codex 实现 OpenAI Codex CLI 采集插件：监听 ~/.codex/sessions 下的
 // rollout JSONL 会话日志并解析为 a3 标准事件。纯事后审计定位——Codex 官方
 // hooks 机制仍为 feature-flag 实验特性（仅可靠覆盖 Bash、需人工 trust、只认 deny），
-// 不宜用于生产阻断，故本插件不实现本地阻断；EvaluateHook 恒放行、
-// ConfigureHook 返回 core.ErrHookUnsupported，待其转正后三期再评估接入。
+// 不宜用于生产阻断，故本插件不实现 core.PreToolUsePlugin 前置拦截能力，
+// 待其转正后三期再评估接入（装配层类型断言探测能力缺席，恒友好提示）。
 //
 // # rollout 格式速查（基于本机 codex-cli 0.149.0 真实采样 + 多方文档交叉印证）
 //

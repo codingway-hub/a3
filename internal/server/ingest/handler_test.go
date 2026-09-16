@@ -38,7 +38,7 @@ func newHandlerRouter(t *testing.T) (*gin.Engine, *store.Store, *alert.Service, 
 		auth.HashToken(installCode), "device", time.Now().Add(time.Hour), 1000, "handler-tester", "handler-tester", nil)
 	require.NoError(t, createErr)
 
-	ingestService := NewService(eventStore, alertService)
+	ingestService := NewService(eventStore, alertService, 0)
 	engine := gin.New()
 	NewHandler(ingestService).RegisterRoutes(engine)
 	return engine, eventStore, alertService, installCode

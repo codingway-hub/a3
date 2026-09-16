@@ -17,8 +17,11 @@ const (
 	AuditActionRuleDelete     = "rule_delete"
 	AuditActionDeviceRevoke   = "device_revoke"
 	AuditActionDeviceRestore  = "device_restore"
-	AuditActionUserCreate     = "user_create"
-	AuditActionUserUpdate     = "user_update"
+	// AuditActionDeviceDisable 设备临时挂起（disabled）：身份保留、Token 鉴权立即
+	// 401、不可自助重注册，恢复仅管理员操作。区别于吊销（身份释放、可重新注册）。
+	AuditActionDeviceDisable = "device_disable"
+	AuditActionUserCreate    = "user_create"
+	AuditActionUserUpdate    = "user_update"
 
 	AuditActionUserPasswordReset = "user_password_reset"
 
@@ -156,10 +159,13 @@ func (store *Store) ListAuditLog(ctx context.Context, filter AuditFilter) ([]Aud
 	return entries, totalCount, rows.Err()
 }
 
-// deviceStatusAuditAction 设备状态 → 审计动作映射；非吊销/恢复语义的状态返回 false。
+// deviceStatusAuditAction 设备状态 → 审计动作映射；非吊销/禁用/恢复语义的状态返回 false。
 func deviceStatusAuditAction(status string) (string, bool) {
 	if status == "revoked" {
 		return AuditActionDeviceRevoke, true
+	}
+	if status == "disabled" {
+		return AuditActionDeviceDisable, true
 	}
 	if status == "active" {
 		return AuditActionDeviceRestore, true
@@ -167,8 +173,9 @@ func deviceStatusAuditAction(status string) (string, bool) {
 	return "", false
 }
 
-// SetDeviceStatusWithAudit 更新设备状态并同事务落 device_revoke/device_restore 审计
-// （before/after 为 {status: ...} 快照）；行不存在返回 ErrNotFound，无留痕。
+// SetDeviceStatusWithAudit 更新设备状态并同事务落 device_revoke/device_disable/
+// device_restore 审计（before/after 为 {status: ...} 快照）；行不存在返回
+// ErrNotFound，无留痕。
 func (store *Store) SetDeviceStatusWithAudit(ctx context.Context, deviceID string, status string, operator string) error {
 	auditAction, isAuditable := deviceStatusAuditAction(status)
 	if !isAuditable {

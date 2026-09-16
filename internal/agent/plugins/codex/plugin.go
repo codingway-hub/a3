@@ -41,12 +41,5 @@ func (codexPlugin *Plugin) ParseLine(sourcePath string, lineBytes []byte) ([]sch
 	return codexPlugin.parser.ParseLine(sourcePath, lineBytes)
 }
 
-// EvaluateHook Codex 无前置 Hook 能力：恒放行、零事件（纯审计定位）。
-func (codexPlugin *Plugin) EvaluateHook(hookRequest core.HookRequest) (core.HookDecision, error) {
-	return core.HookDecision{}, nil
-}
-
-// ConfigureHook Codex 无宿主配置可装卸：返回哨兵错误供装配层给出友好提示。
-func (codexPlugin *Plugin) ConfigureHook(homeDir string, enable bool) (bool, error) {
-	return false, core.ErrHookUnsupported
-}
+// 本插件刻意不实现 core.PreToolUsePlugin（前置拦截能力）：Codex 官方 hooks 仍是
+// 实验特性，维护纯审计定位。装配层类型断言发现能力缺席即友好提示/fail-open。

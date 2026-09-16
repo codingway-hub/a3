@@ -1,4 +1,4 @@
-// Package notify worker：轮询未通知告警，聚合外送，管理退避与重试。
+// Package notify worker：周期领取到期的通知 outbox，聚合外送，管理退避与投递状态。
 package notify
 
 import (
@@ -9,18 +9,19 @@ import (
 	"github.com/codingway-hub/a3/internal/server/store"
 )
 
-// Worker 配置默认值：批大小、重试上限、轮询周期、单次唤醒最大批数与退避封顶。
+// Worker 配置默认值：批大小、重试上限、轮询周期、单次唤醒最大批数与退避底数/封顶。
 const (
 	defaultBatchSize   = 50
 	defaultMaxAttempts = 10
 	defaultPollEvery   = time.Minute
 	defaultMaxBurst    = 10
-	maxBackoffWait     = 15 * time.Minute
+	backoffBaseDelay   = time.Minute
+	backoffMaxDelay    = 15 * time.Minute
 )
 
-// Worker 周期捞取未通知告警，聚合成 Digest 经 Channel 外送。
-// 行级 notify_attempts 达上限的告警永久排除（坏 URL 自然老化）；
-// worker 级连续失败指数退避 1min→15min，成功复位。
+// Worker 周期领取到期待投递的通知（outbox），聚合成 Digest 经 Channel 外送。
+// 投递状态与退避全部按行落在 outbox 上：领取即置 sending（SKIP LOCKED，多副本安全），
+// 成功置 sent；失败累计 attempts、按指数退避推后 next_attempt_at，达上限置 dropped。
 type Worker struct {
 	eventStore    *store.Store
 	channel       Channel
@@ -29,6 +30,8 @@ type Worker struct {
 	maxAttempts   int
 	pollEvery     time.Duration
 	maxBatchBurst int
+	backoffBase   time.Duration
+	backoffCap    time.Duration
 	logger        *slog.Logger
 }
 
@@ -45,87 +48,99 @@ func NewWorker(eventStore *store.Store, channel Channel, severities []string, lo
 		maxAttempts:   defaultMaxAttempts,
 		pollEvery:     defaultPollEvery,
 		maxBatchBurst: defaultMaxBurst,
+		backoffBase:   backoffBaseDelay,
+		backoffCap:    backoffMaxDelay,
 		logger:        logger,
 	}
 }
 
-// Run 主循环直到 ctx 取消。启动即捞一次（照 alert.Run 先例）；
-// 失败退避翻倍封顶 15min，成功复位到 pollEvery。失败即停本轮：
-// created_at 升序下老告警先送，避免坏批反复占用发送预算。
+// Run 主循环直到 ctx 取消，启动即捞一次（照 alert.Run 先例）。
+// 重试节奏由各 outbox 行的 next_attempt_at 独立调度，进程无需维护全局退避。
 func (worker *Worker) Run(ctx context.Context) {
 	worker.deliverPending(ctx)
-	wait := worker.pollEvery
+	ticker := time.NewTicker(worker.pollEvery)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(wait):
-			roundFailed := worker.deliverPending(ctx)
-			if roundFailed {
-				wait = min(wait*2, maxBackoffWait)
-			} else {
-				wait = worker.pollEvery
+		case <-ticker.C:
+			worker.deliverPending(ctx)
+		}
+	}
+}
+
+// deliverPending 领取并外送本轮全部到期通知。单批失败即停本轮：失败的批已各自
+// 推后 next_attempt_at（≥1min），先把发送预算让给其余到期行，避免连环失败占满周期。
+func (worker *Worker) deliverPending(ctx context.Context) {
+	for burst := 0; burst < worker.maxBatchBurst; burst++ {
+		due, claimErr := worker.eventStore.ClaimDueNotifications(
+			ctx, worker.severities, worker.maxAttempts, worker.batchSize)
+		if claimErr != nil {
+			worker.logger.Warn("通知外送：领取到期通知失败", slog.Any("err", claimErr))
+			return
+		}
+		if len(due) == 0 {
+			return
+		}
+		if deliveryErr := worker.deliverBatch(ctx, due); deliveryErr != nil {
+			worker.logger.Warn("通知外送：本批发送失败，等待退避重试",
+				slog.Int("count", len(due)), slog.Any("err", deliveryErr))
+			return
+		}
+	}
+}
+
+// deliverBatch 把一批领取到的通知聚合成摘要外送；成功标记 sent，失败累计次数并退避。
+// Mark 失败只记日志：sending 行超过孤儿窗口后会被下轮领取查询回收重投（at-least-once）。
+func (worker *Worker) deliverBatch(ctx context.Context, due []store.Notification) error {
+	alerts := make([]store.Alert, len(due))
+	notificationIDs := make([]string, len(due))
+	windowStart, windowEnd := due[0].Alert.CreatedAt, due[0].Alert.CreatedAt
+	for index, notification := range due {
+		alerts[index] = notification.Alert
+		notificationIDs[index] = notification.ID
+		if notification.Alert.CreatedAt.Before(windowStart) {
+			windowStart = notification.Alert.CreatedAt
+		}
+		if notification.Alert.CreatedAt.After(windowEnd) {
+			windowEnd = notification.Alert.CreatedAt
+		}
+	}
+	digest := Digest{Alerts: alerts, WindowStart: windowStart, WindowEnd: windowEnd}
+
+	if sendErr := worker.channel.Send(ctx, digest); sendErr != nil {
+		// 本条失败后下一次尝试号为 attempts+1；退避按其指数展开
+		nextAttemptCount := 0
+		for _, notification := range due {
+			if notification.Attempts+1 > nextAttemptCount {
+				nextAttemptCount = notification.Attempts + 1
 			}
 		}
-	}
-}
-
-// deliverPending 捞取并外送本轮全部待通知告警；返回本轮是否出现失败。
-func (worker *Worker) deliverPending(ctx context.Context) bool {
-	roundFailed := false
-	for burst := 0; burst < worker.maxBatchBurst; burst++ {
-		pendingAlerts, listErr := worker.eventStore.ListUnnotifiedAlerts(
-			ctx, worker.severities, worker.maxAttempts, worker.batchSize)
-		if listErr != nil {
-			worker.logger.Warn("通知外送：捞取未通知告警失败", slog.Any("err", listErr))
-			return true
-		}
-		if len(pendingAlerts) == 0 {
-			return roundFailed
-		}
-		if sendErr := worker.deliverBatch(ctx, pendingAlerts); sendErr != nil {
-			worker.logger.Warn("通知外送：本批发送失败，等待重试",
-				slog.Int("count", len(pendingAlerts)), slog.Any("err", sendErr))
-			roundFailed = true
-			break // 失败即停本轮，老告警先送
-		}
-	}
-	// burst 用尽仍有积压：不置失败，下轮 pollEvery 后继续
-	return roundFailed
-}
-
-// deliverBatch 把一批告警聚合成摘要外送；成功标记已通知，失败累计次数。
-// Mark 失败只记日志：下轮 ListUnnotifiedAlerts 会再次捞出（at-least-once 重发）。
-func (worker *Worker) deliverBatch(ctx context.Context, batchAlerts []store.Alert) error {
-	windowStart, windowEnd := batchAlerts[0].CreatedAt, batchAlerts[0].CreatedAt
-	for _, alertRow := range batchAlerts {
-		if alertRow.CreatedAt.Before(windowStart) {
-			windowStart = alertRow.CreatedAt
-		}
-		if alertRow.CreatedAt.After(windowEnd) {
-			windowEnd = alertRow.CreatedAt
-		}
-	}
-	digest := Digest{Alerts: batchAlerts, WindowStart: windowStart, WindowEnd: windowEnd}
-
-	sendErr := worker.channel.Send(ctx, digest)
-	if sendErr != nil {
-		if incrementErr := worker.eventStore.IncrementAlertNotifyAttempts(ctx, alertIDsOf(batchAlerts)); incrementErr != nil {
-			worker.logger.Warn("通知外送：累计失败次数落库失败", slog.Any("err", incrementErr))
+		nextDelay := notifyBackoff(nextAttemptCount, worker.backoffBase, worker.backoffCap)
+		if markErr := worker.eventStore.MarkNotificationsFailed(
+			ctx, notificationIDs, sendErr.Error(), nextDelay, worker.maxAttempts); markErr != nil {
+			worker.logger.Warn("通知外送：失败状态落库失败", slog.Any("err", markErr))
 		}
 		return sendErr
 	}
-	if markErr := worker.eventStore.MarkAlertsNotified(ctx, alertIDsOf(batchAlerts)); markErr != nil {
-		worker.logger.Warn("通知外送：发送成功但标记落库失败，下轮将重发", slog.Any("err", markErr))
+	if markErr := worker.eventStore.MarkNotificationsSent(ctx, notificationIDs); markErr != nil {
+		worker.logger.Warn("通知外送：发送成功但标记落库失败，sending 孤儿将由下轮回收重投", slog.Any("err", markErr))
 	}
 	return nil
 }
 
-// alertIDsOf 提取告警 ID 列表。
-func alertIDsOf(alertList []store.Alert) []string {
-	ids := make([]string, 0, len(alertList))
-	for _, alertRow := range alertList {
-		ids = append(ids, alertRow.ID)
+// notifyBackoff 第 nextAttempt 次尝试的等待时长：底数倍增、封顶（首次失败即扣底数）。
+func notifyBackoff(nextAttempt int, base time.Duration, backoffCap time.Duration) time.Duration {
+	if nextAttempt <= 1 {
+		return base
 	}
-	return ids
+	delay := base
+	for attempt := 1; attempt < nextAttempt && delay < backoffCap; attempt++ {
+		delay *= 2
+	}
+	if delay > backoffCap {
+		return backoffCap
+	}
+	return delay
 }

@@ -36,7 +36,7 @@ func newTestService(t *testing.T) (*Service, *store.Store, string) {
 		"alerts", "sessions", "events", "devices", "install_credentials", "install_credential_uses", "audit_log")
 	eventStore := store.NewStore(testPool)
 	installCode := mustTestInstallCode(t, eventStore, 1000)
-	ingestService := NewService(eventStore, alert.NewService(eventStore))
+	ingestService := NewService(eventStore, alert.NewService(eventStore), 0)
 	return ingestService, eventStore, installCode
 }
 
@@ -152,13 +152,13 @@ func TestRegisterDeviceRequiresInstallCredential(t *testing.T) {
 	}
 
 	t.Run("缺代码", func(t *testing.T) {
-		closedService := NewService(testStore, alert.NewService(testStore))
+		closedService := NewService(testStore, alert.NewService(testStore), 0)
 		_, registerErr := closedService.RegisterDevice(ctx, baseInput, "", "10.0.0.1")
 		assert.ErrorIs(t, registerErr, ErrCredentialInvalid)
 	})
 
 	t.Run("格式不合法", func(t *testing.T) {
-		closedService := NewService(testStore, alert.NewService(testStore))
+		closedService := NewService(testStore, alert.NewService(testStore), 0)
 		input := baseInput
 		input.InstallCode = "not-a-valid-code"
 		_, registerErr := closedService.RegisterDevice(ctx, input, "", "10.0.0.1")
@@ -166,7 +166,7 @@ func TestRegisterDeviceRequiresInstallCredential(t *testing.T) {
 	})
 
 	t.Run("代码无效（未入库）", func(t *testing.T) {
-		closedService := NewService(testStore, alert.NewService(testStore))
+		closedService := NewService(testStore, alert.NewService(testStore), 0)
 		unknownCode, _ := auth.GenerateInstallCode()
 		input := baseInput
 		input.InstallCode = unknownCode
@@ -190,7 +190,7 @@ func TestRegisterDeviceRequiresInstallCredential(t *testing.T) {
 
 		// 先成功消费掉一次性代码的唯一用量（注册一台设备），随后再注册即用量用尽。
 		// 配合下方「用量耗尽」用例顺位：该用例再携同一代码注册必须被拒。
-		consumedService := NewService(testStore, alert.NewService(testStore))
+		consumedService := NewService(testStore, alert.NewService(testStore), 0)
 		consumedResult, consumedErr := consumedService.RegisterDevice(ctx, RegisterInput{
 			Hostname: "macbook", OS: "darwin", Arch: "arm64",
 			MachineFingerprint: "fp-gate-oneshot", InstallCode: oneShotCode}, "", "10.0.0.2")
@@ -208,7 +208,7 @@ func TestRegisterDeviceRequiresInstallCredential(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				closedService := NewService(testStore, alert.NewService(testStore))
+				closedService := NewService(testStore, alert.NewService(testStore), 0)
 				input := baseInput
 				input.InstallCode = tc.code
 				input.MachineFingerprint = "fp-gate-" + tc.name
@@ -370,4 +370,42 @@ func TestSubmitEventsValidation(t *testing.T) {
 		_, bigErr := ingestService.SubmitEvents(ctx, deviceRow, BatchEnvelope{Events: oversized})
 		assert.ErrorIs(t, bigErr, ErrBatchTooLarge)
 	})
+}
+
+// TestRegisterDeviceAppliesTokenTTL 配置 A3_DEVICE_TOKEN_TTL_HOURS 后，新注册的
+// 设备 Token 落到期时间；未配置（0=永久）时到期字段为 NULL。
+func TestRegisterDeviceAppliesTokenTTL(t *testing.T) {
+	eventStore := newTestServiceStore(t)
+	installCode := mustTestInstallCode(t, eventStore, 1000)
+	ctx := context.Background()
+
+	// TTL 关闭（0=永久）：新注册设备无到期时间
+	permanentService := NewService(eventStore, alert.NewService(eventStore), 0)
+	permanentResult, permanentErr := permanentService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "host-immortal", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-ttl-0", InstallCode: installCode}, "", "10.0.0.1")
+	require.NoError(t, permanentErr)
+	permanentRow, permanentLookupErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(permanentResult.Token))
+	require.NoError(t, permanentLookupErr)
+	assert.Nil(t, permanentRow.TokenExpiresAt, "TTL 未配置时注册不下发到期时间")
+
+	// TTL 开启（24h）：新注册设备落到期时间
+	ttlService := NewService(eventStore, alert.NewService(eventStore), 24*time.Hour)
+	ttlResult, ttlErr := ttlService.RegisterDevice(ctx, RegisterInput{
+		Hostname: "host-ttl", OS: "darwin", Arch: "arm64",
+		MachineFingerprint: "fp-ttl-1", InstallCode: installCode}, "", "10.0.0.1")
+	require.NoError(t, ttlErr)
+	ttlRow, ttlLookupErr := eventStore.GetDeviceByTokenHash(ctx, auth.HashToken(ttlResult.Token))
+	require.NoError(t, ttlLookupErr)
+	require.NotNil(t, ttlRow.TokenExpiresAt)
+	assert.WithinDuration(t, time.Now().Add(24*time.Hour), *ttlRow.TokenExpiresAt, time.Minute)
+}
+
+// newTestServiceStore 返回可复用的真实库 store（供 TTL 等非标准装配场景）。
+func newTestServiceStore(t *testing.T) *store.Store {
+	t.Helper()
+	testPool := servetest.NewTestPool(t)
+	servetest.ResetTablesForTest(t, testPool,
+		"alerts", "sessions", "events", "devices", "install_credentials", "install_credential_uses", "audit_log")
+	return store.NewStore(testPool)
 }

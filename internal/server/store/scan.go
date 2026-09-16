@@ -54,12 +54,19 @@ func (store *Store) ApplyScanOutcome(ctx context.Context, outcome ScanOutcome) (
 	}
 
 	for _, alertToCreate := range outcome.Alerts {
-		if _, insertErr := tx.Exec(ctx,
+		var createdAlertID string
+		if insertErr := tx.QueryRow(ctx,
 			`INSERT INTO alerts (device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 RETURNING id`,
 			alertToCreate.DeviceID, alertToCreate.SessionKey, alertToCreate.EventID, alertToCreate.RuleID,
 			alertToCreate.RuleName, alertToCreate.Severity, alertToCreate.Action,
-			alertToCreate.Snippet, alertToCreate.Summary); insertErr != nil {
+			alertToCreate.Snippet, alertToCreate.Summary).Scan(&createdAlertID); insertErr != nil {
+			return false, insertErr
+		}
+		alertToCreate.ID = createdAlertID
+		// 与告警同事务登记外送通知：进程崩溃也不会「告警已落库但通知漏入队」
+		if insertErr := enqueueNotification(ctx, tx, createdAlertID); insertErr != nil {
 			return false, insertErr
 		}
 	}

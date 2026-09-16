@@ -20,22 +20,34 @@ type Alert struct {
 	Action         string
 	Snippet        string
 	Summary        string
-	Status         string
-	CreatedAt      time.Time
-	AcknowledgedAt *time.Time
-	NotifiedAt     *time.Time // 外送成功时刻；NULL=尚未外送到通知渠道
-	NotifyAttempts int        // 外送失败次数；达到上限后轮询查询不再返回（坏 URL 自然老化）
+	Status            string
+	CreatedAt         time.Time
+	AcknowledgedAt    *time.Time
+	NotificationStatus string // 外送投递状态（notification_outbox 最新一条）；空串=从未入队通知
 }
 
-// CreateAlert 写入一条告警；id/created_at 由数据库生成后回填，初始状态固定为 open。
+// CreateAlert 写入一条告警并同事务登记外送通知（outbox）：id/created_at 由数据库生成后回填，
+// 初始状态固定为 open。告警落库与通知入队同生共死——进程崩溃也不会「有告警无通知」。
 func (store *Store) CreateAlert(ctx context.Context, alert *Alert) error {
-	return store.pool.QueryRow(ctx,
+	tx, beginErr := store.pool.Begin(ctx)
+	if beginErr != nil {
+		return beginErr
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if scanErr := tx.QueryRow(ctx,
 		`INSERT INTO alerts (device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, status, created_at`,
 		alert.DeviceID, alert.SessionKey, alert.EventID, alert.RuleID, alert.RuleName,
 		alert.Severity, alert.Action, alert.Snippet, alert.Summary,
-	).Scan(&alert.ID, &alert.Status, &alert.CreatedAt)
+	).Scan(&alert.ID, &alert.Status, &alert.CreatedAt); scanErr != nil {
+		return scanErr
+	}
+	if enqueueErr := enqueueNotification(ctx, tx, alert.ID); enqueueErr != nil {
+		return enqueueErr
+	}
+	return tx.Commit(ctx)
 }
 
 // AcknowledgeAlert 确认处理告警。仅当仍为 open 时更新；重复确认幂等返回成功；
@@ -63,7 +75,7 @@ func (store *Store) AcknowledgeAlert(ctx context.Context, alertID string) error 
 	return nil
 }
 
-const alertColumns = `id, device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary, status, created_at, acknowledged_at, notified_at, notify_attempts`
+const alertColumns = `id, device_id, session_key, event_id, rule_id, rule_name, severity, action, snippet, summary, status, created_at, acknowledged_at, (SELECT status FROM notification_outbox WHERE alert_id = alerts.id ORDER BY created_at DESC LIMIT 1) AS notification_status`
 
 // AlertFilter 描述告警列表的筛选条件；空串表示不过滤。
 type AlertFilter struct {
@@ -146,7 +158,7 @@ func scanAlertRows(rows pgx.Rows) ([]Alert, error) {
 		if scanErr := rows.Scan(&alertRow.ID, &alertRow.DeviceID, &alertRow.SessionKey, &alertRow.EventID,
 			&alertRow.RuleID, &alertRow.RuleName, &alertRow.Severity, &alertRow.Action, &alertRow.Snippet, &alertRow.Summary,
 			&alertRow.Status, &alertRow.CreatedAt, &alertRow.AcknowledgedAt,
-			&alertRow.NotifiedAt, &alertRow.NotifyAttempts); scanErr != nil {
+			&alertRow.NotificationStatus); scanErr != nil {
 			return nil, scanErr
 		}
 		alertList = append(alertList, alertRow)

@@ -18,14 +18,18 @@ type AdminUser struct {
 	PasswordHash string
 	Role         string // admin|auditor（迁移 CHECK 约束兜底）
 	Enabled      bool
+	// TokenVersion 会话代际号：账号状态变更（停用/改角色/重置口令）时自增。
+	// 登录签发的 JWT 携带签发时的代际号，鉴权中间件比对库内当前值——停用/降级
+	// 不再需要等到 JWT 自然过期才生效。
+	TokenVersion int64
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 
 // adminUserColumns 列表查询用（不含口令哈希，杜绝意外外泄）；单行认证查询单独拼列。
-const adminUserColumns = `id, username, role, enabled, created_at, updated_at`
+const adminUserColumns = `id, username, role, enabled, token_version, created_at, updated_at`
 
-const adminUserFullColumns = `id, username, password_hash, role, enabled, created_at, updated_at`
+const adminUserFullColumns = `id, username, password_hash, role, enabled, token_version, created_at, updated_at`
 
 // CountAdminUsers 返回账号总数；为 0 时服务端启动用 env 凭据种子首个 admin。
 func (store *Store) CountAdminUsers(ctx context.Context) (int, error) {
@@ -56,11 +60,29 @@ func (store *Store) GetAdminUserByUsername(ctx context.Context, username string)
 	scanErr := store.pool.QueryRow(ctx,
 		`SELECT `+adminUserFullColumns+` FROM admin_users WHERE username = $1`, username).
 		Scan(&userRow.ID, &userRow.Username, &userRow.PasswordHash, &userRow.Role,
-			&userRow.Enabled, &userRow.CreatedAt, &userRow.UpdatedAt)
+			&userRow.Enabled, &userRow.TokenVersion, &userRow.CreatedAt, &userRow.UpdatedAt)
 	if scanErr != nil {
 		return AdminUser{}, mapUserScanErr(scanErr)
 	}
 	return userRow, nil
+}
+
+// GetAdminUserSessionState 轻量查询 JWT 鉴权所需的账号态（启用 + 代际号）。
+// RequireJWT 用它比对 JWT 签发时的版本：状态变更自增后，签发更早的会话立即失效。
+// 返回 (enabled, tokenVersion, error)；账号不存在返回 ErrNotFound。
+func (store *Store) GetAdminUserSessionState(ctx context.Context, username string) (bool, int64, error) {
+	var enabled bool
+	var tokenVersion int64
+	scanErr := store.pool.QueryRow(ctx,
+		`SELECT enabled, token_version FROM admin_users WHERE username = $1`, username).
+		Scan(&enabled, &tokenVersion)
+	if errors.Is(scanErr, pgx.ErrNoRows) {
+		return false, 0, ErrNotFound
+	}
+	if scanErr != nil {
+		return false, 0, scanErr
+	}
+	return enabled, tokenVersion, nil
 }
 
 // ListAdminUsers 返回全部账号（不含口令哈希），按创建时间升序。
@@ -76,7 +98,7 @@ func (store *Store) ListAdminUsers(ctx context.Context) ([]AdminUser, error) {
 	for rows.Next() {
 		var userRow AdminUser
 		if scanErr := rows.Scan(&userRow.ID, &userRow.Username, &userRow.Role,
-			&userRow.Enabled, &userRow.CreatedAt, &userRow.UpdatedAt); scanErr != nil {
+			&userRow.Enabled, &userRow.TokenVersion, &userRow.CreatedAt, &userRow.UpdatedAt); scanErr != nil {
 			return nil, scanErr
 		}
 		userList = append(userList, userRow)
@@ -85,15 +107,18 @@ func (store *Store) ListAdminUsers(ctx context.Context) ([]AdminUser, error) {
 }
 
 // SetAdminUserEnabled 停用/启用账号，返回更新后行供审计快照；不存在返回 ErrNotFound。
+// token_version 同步自增：停用即作废全部已签发会话（防旧 token 在过渡窗口继续越权）。
 func (store *Store) SetAdminUserEnabled(ctx context.Context, userID int64, enabled bool) (AdminUser, error) {
 	return store.updateAdminUserRow(ctx,
-		`UPDATE admin_users SET enabled = $2, updated_at = now() WHERE id = $1`, userID, enabled)
+		`UPDATE admin_users SET enabled = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1`, userID, enabled)
 }
 
 // SetAdminUserRole 变更账号角色，返回更新后行供审计快照；不存在返回 ErrNotFound。
+// token_version 同步自增：降级立即使旧 role 的已签发 token 失效——封堵「老 admin 会话
+// 继续有 admin 权限直到 JWT 自然过期」的提权残留窗口。
 func (store *Store) SetAdminUserRole(ctx context.Context, userID int64, role string) (AdminUser, error) {
 	return store.updateAdminUserRow(ctx,
-		`UPDATE admin_users SET role = $2, updated_at = now() WHERE id = $1`, userID, role)
+		`UPDATE admin_users SET role = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1`, userID, role)
 }
 
 // updateAdminUserRow 执行 UPDATE ... RETURNING 完整行（不含哈希也够快照；哈希不外泄）。
@@ -102,7 +127,7 @@ func (store *Store) updateAdminUserRow(ctx context.Context, updateQuery string, 
 	scanErr := store.pool.QueryRow(ctx, updateQuery+` RETURNING `+adminUserColumns,
 		userID, updateValue).
 		Scan(&userRow.ID, &userRow.Username, &userRow.Role,
-			&userRow.Enabled, &userRow.CreatedAt, &userRow.UpdatedAt)
+			&userRow.Enabled, &userRow.TokenVersion, &userRow.CreatedAt, &userRow.UpdatedAt)
 	if scanErr != nil {
 		return AdminUser{}, mapUserScanErr(scanErr)
 	}
@@ -110,9 +135,10 @@ func (store *Store) updateAdminUserRow(ctx context.Context, updateQuery string, 
 }
 
 // SetAdminUserPassword 重置口令哈希；不存在返回 ErrNotFound。
+// token_version 同步自增：口令疑似泄露场景中，重置即作废可疑会话。
 func (store *Store) SetAdminUserPassword(ctx context.Context, userID int64, passwordHash string) error {
 	commandTag, execErr := store.pool.Exec(ctx,
-		`UPDATE admin_users SET password_hash = $2, updated_at = now() WHERE id = $1`,
+		`UPDATE admin_users SET password_hash = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1`,
 		userID, passwordHash)
 	if execErr != nil {
 		return execErr
@@ -129,7 +155,7 @@ func (store *Store) GetAdminUserByID(ctx context.Context, userID int64) (AdminUs
 	scanErr := store.pool.QueryRow(ctx,
 		`SELECT `+adminUserFullColumns+` FROM admin_users WHERE id = $1`, userID).
 		Scan(&userRow.ID, &userRow.Username, &userRow.PasswordHash, &userRow.Role,
-			&userRow.Enabled, &userRow.CreatedAt, &userRow.UpdatedAt)
+			&userRow.Enabled, &userRow.TokenVersion, &userRow.CreatedAt, &userRow.UpdatedAt)
 	if scanErr != nil {
 		return AdminUser{}, mapUserScanErr(scanErr)
 	}
@@ -158,7 +184,7 @@ func (store *Store) ResetAdminUserPasswordWithAudit(ctx context.Context,
 	var updatedRow AdminUser
 	withTxErr := store.withTx(ctx, func(tx pgx.Tx) error {
 		commandTag, execErr := tx.Exec(ctx,
-			`UPDATE admin_users SET password_hash = $2, updated_at = now() WHERE id = $1`,
+			`UPDATE admin_users SET password_hash = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1`,
 			userID, passwordHash)
 		if execErr != nil {
 			return execErr
@@ -169,7 +195,7 @@ func (store *Store) ResetAdminUserPasswordWithAudit(ctx context.Context,
 		if scanErr := tx.QueryRow(ctx,
 			`SELECT `+adminUserColumns+` FROM admin_users WHERE id = $1`, userID).
 			Scan(&updatedRow.ID, &updatedRow.Username, &updatedRow.Role,
-				&updatedRow.Enabled, &updatedRow.CreatedAt, &updatedRow.UpdatedAt); scanErr != nil {
+				&updatedRow.Enabled, &updatedRow.TokenVersion, &updatedRow.CreatedAt, &updatedRow.UpdatedAt); scanErr != nil {
 			return scanErr
 		}
 		return appendAuditInTx(ctx, tx, AuditActionUserPasswordReset, AuditTargetUser, updatedRow.Username,

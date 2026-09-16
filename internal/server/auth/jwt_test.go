@@ -12,34 +12,34 @@ import (
 )
 
 func TestJWTRoundTrip(t *testing.T) {
-	token, signErr := SignJWT("secret-key", "admin", "admin", 8*time.Hour)
+	token, signErr := SignJWT("secret-key", "admin", "admin", 0, 8*time.Hour)
 	require.NoError(t, signErr)
 
-	username, _, verifyErr := VerifyJWT("secret-key", token)
+	username, _, _, verifyErr := VerifyJWT("secret-key", token)
 	require.NoError(t, verifyErr)
 	assert.Equal(t, "admin", username)
 }
 
 func TestJWTWrongSecretRejected(t *testing.T) {
-	token, signErr := SignJWT("secret-key", "admin", "admin", time.Hour)
+	token, signErr := SignJWT("secret-key", "admin", "admin", 0, time.Hour)
 	require.NoError(t, signErr)
 
-	_, _, verifyErr := VerifyJWT("other-secret", token)
+	_, _, _, verifyErr := VerifyJWT("other-secret", token)
 	assert.ErrorIs(t, verifyErr, ErrInvalidToken)
 }
 
 func TestJWTExpired(t *testing.T) {
 	// 负 TTL 签发即得已过期 Token
-	expiredToken, signErr := SignJWT("secret-key", "admin", "admin", -time.Minute)
+	expiredToken, signErr := SignJWT("secret-key", "admin", "admin", 0, -time.Minute)
 	require.NoError(t, signErr)
 
 	// 签名本身合法（同密钥可验），仅过期：错误类型应为 ErrTokenExpired
-	_, _, verifyErr := VerifyJWT("secret-key", expiredToken)
+	_, _, _, verifyErr := VerifyJWT("secret-key", expiredToken)
 	assert.ErrorIs(t, verifyErr, ErrTokenExpired)
 }
 
 func TestJWTForgedPayloadRejected(t *testing.T) {
-	token, signErr := SignJWT("secret-key", "admin", "admin", time.Hour)
+	token, signErr := SignJWT("secret-key", "admin", "admin", 0, time.Hour)
 	require.NoError(t, signErr)
 
 	// 篡改 payload 段（换用户）后签名不再匹配
@@ -48,7 +48,7 @@ func TestJWTForgedPayloadRejected(t *testing.T) {
 	require.NoError(t, encodeErr)
 	forgedToken := parts[0] + "." + base64.RawURLEncoding.EncodeToString(forgedClaims) + "." + parts[2]
 
-	_, _, verifyErr := VerifyJWT("secret-key", forgedToken)
+	_, _, _, verifyErr := VerifyJWT("secret-key", forgedToken)
 	assert.ErrorIs(t, verifyErr, ErrInvalidToken)
 }
 
@@ -61,7 +61,7 @@ func TestJWTMalformedRejected(t *testing.T) {
 		"非base64声明": "eyJhbGciOiJIUzI1NiJ9.@@@.c2ln",
 	}
 	for name, badToken := range cases {
-		_, _, verifyErr := VerifyJWT("secret-key", badToken)
+		_, _, _, verifyErr := VerifyJWT("secret-key", badToken)
 		assert.ErrorIs(t, verifyErr, ErrInvalidToken, name)
 	}
 }
@@ -72,7 +72,7 @@ func TestJWTHeaderAlgPinned(t *testing.T) {
 	claimsBytes, _ := json.Marshal(Claims{Sub: "attacker", Exp: time.Now().Add(time.Hour).Unix()})
 	noneToken := noneHeader + "." + base64.RawURLEncoding.EncodeToString(claimsBytes) + "."
 
-	_, _, verifyErr := VerifyJWT("secret-key", noneToken)
+	_, _, _, verifyErr := VerifyJWT("secret-key", noneToken)
 	assert.ErrorIs(t, verifyErr, ErrInvalidToken)
 }
 
@@ -85,18 +85,18 @@ func TestJWTOldFormatRejected(t *testing.T) {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	oldToken := header + "." + base64.RawURLEncoding.EncodeToString(oldClaims) + ".placeholder"
 	// 重签保证签名合法（仅 role 缺失被拒，而非签名错误）
-	validSigned, signErr := SignJWT("secret-key", "admin", "admin", time.Hour)
+	validSigned, signErr := SignJWT("secret-key", "admin", "admin", 0, time.Hour)
 	require.NoError(t, signErr)
 	oldTokenParts := strings.Split(validSigned, ".")
 	oldToken = oldTokenParts[0] + "." + base64.RawURLEncoding.EncodeToString(oldClaims) + "." + oldTokenParts[2]
 
-	_, _, verifyErr := VerifyJWT("secret-key", oldToken)
+	_, _, _, verifyErr := VerifyJWT("secret-key", oldToken)
 	assert.ErrorIs(t, verifyErr, ErrInvalidToken)
 }
 
 func TestJWTInvalidRoleRejected(t *testing.T) {
 	// role 不在合法集合（含空串）一律拒绝
-	_, signErr := SignJWT("secret-key", "admin", "superuser", time.Hour)
+	_, signErr := SignJWT("secret-key", "admin", "superuser", 0, time.Hour)
 	require.NoError(t, signErr)
 	// SignJWT 不校验角色（信任调用方），Verify 是唯一防线：手工构造越权 claims
 	claimsBytes, encodeErr := json.Marshal(Claims{Sub: "admin", Role: "superuser", Exp: time.Now().Add(time.Hour).Unix()})
@@ -106,6 +106,25 @@ func TestJWTInvalidRoleRejected(t *testing.T) {
 	signature := hmacSHA256([]byte("secret-key"), []byte(signingInput))
 	forgedRoleToken := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
 
-	_, _, verifyErr := VerifyJWT("secret-key", forgedRoleToken)
+	_, _, _, verifyErr := VerifyJWT("secret-key", forgedRoleToken)
 	assert.ErrorIs(t, verifyErr, ErrInvalidToken)
+}
+
+// 代际号随 JWT 往返；负值代际号防御式拒绝。
+func TestJWTTokenVersionRoundTripAndGuard(t *testing.T) {
+	token, signErr := SignJWT("secret-key", "admin", "admin", 5, time.Hour)
+	require.NoError(t, signErr)
+	_, _, tokenVersion, verifyErr := VerifyJWT("secret-key", token)
+	require.NoError(t, verifyErr)
+	assert.Equal(t, int64(5), tokenVersion, "JWT 应携带签发时的账号代际号")
+
+	// 手工构造负代际号（不进中间件也应被 Verify 拒绝）
+	badClaimsBytes, encodeErr := json.Marshal(Claims{Sub: "admin", Role: "admin", Ver: -1, Exp: time.Now().Add(time.Hour).Unix()})
+	require.NoError(t, encodeErr)
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	signingInput := header + "." + base64.RawURLEncoding.EncodeToString(badClaimsBytes)
+	signature := hmacSHA256([]byte("secret-key"), []byte(signingInput))
+	badVersionToken := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
+	_, _, _, invalidErr := VerifyJWT("secret-key", badVersionToken)
+	assert.ErrorIs(t, invalidErr, ErrInvalidToken)
 }

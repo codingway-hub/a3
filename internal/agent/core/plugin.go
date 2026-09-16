@@ -2,14 +2,10 @@ package core
 
 import (
 	"encoding/json"
-	"errors"
+	"io"
 
 	"github.com/codingway-hub/a3/pkg/schema"
 )
-
-// ErrHookUnsupported 插件不支持前置 Hook（纯审计类 Agent 无本地阻断能力）。
-// 装配层（install-hook CLI）据此给出友好提示而非按错误处理。
-var ErrHookUnsupported = errors.New("该插件不支持前置 Hook")
 
 // LogWatchSpec 插件声明的日志监听位置：Core 据此驱动文件监听引擎。
 type LogWatchSpec struct {
@@ -36,8 +32,9 @@ type HookDecision struct {
 	RiskEvents []schema.Event // 需交上行队列的风险事件（可为空）
 }
 
-// Plugin 终端采集插件契约：所有 Agent 差异化能力收敛于此接口，
-// Core 只依赖本接口——新增 AI Agent 零改动接入。
+// Plugin 终端采集插件基干接口：所有 Agent 差异化能力收敛于此，Core 只依赖本接口
+// （新增 AI Agent 零改动接入）。仅声明通用采集能力——具备宿主前置拦截能力的
+// 插件额外实现 PreToolUsePlugin，由装配层类型断言探测，而非强制全部实现。
 type Plugin interface {
 	// Name 插件唯一标识（如 claude-code），注册表据此去重。
 	Name() string
@@ -48,11 +45,16 @@ type Plugin interface {
 
 	// ParseLine 将一行私有日志解析为标准事件序列；噪音行返回 nil 不产出事件。
 	ParseLine(sourcePath string, line []byte) ([]schema.Event, error)
+}
 
-	// EvaluateHook 处理前置 Hook 输入并给出放行/阻断裁决与风险事件。
+// PreToolUsePlugin 宿主 PreToolUse 前置拦截能力（可选能力）：
+// 实现本接口的插件具备本地前后置拦截，可被装配层安装/卸载 Hook（ConfigureHook）、
+// 逐次放行/阻断裁决（EvaluateHook）并作为宿主 CLI 入口运行（RunPreToolUse）。
+// 纯审计型插件（如 codex）刻意不实现——装配层以类型断言探测到缺席时走友好提示
+// 或 fail-open，不再靠哨兵错误短路每处调用。
+type PreToolUsePlugin interface {
+	Plugin
 	EvaluateHook(hookRequest HookRequest) (HookDecision, error)
-
-	// ConfigureHook 在宿主工具配置中安装（enable=true）或卸载（enable=false）前置 Hook，
-	// 返回配置是否发生变更。实现须保证幂等与可还原。
 	ConfigureHook(homeDir string, enable bool) (changed bool, err error)
+	RunPreToolUse(stdin io.Reader, stderr io.Writer, envelopeSink func(envelopeBytes []byte), agentVersion string) int
 }

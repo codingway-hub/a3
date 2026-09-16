@@ -30,8 +30,8 @@ type hookSpec struct {
 	Command string `json:"command"`
 }
 
-// 编译期断言：ConfigureHook 就位后 Plugin 完整实现 core.Plugin。
-var _ core.Plugin = (*Plugin)(nil)
+// 编译期断言：Claude 插件完整实现 PreToolUsePlugin（基干采集能力 + 前置拦截能力）。
+var _ core.PreToolUsePlugin = (*Plugin)(nil)
 
 // ConfigureHook 实现 core.Plugin：enable=true 安装本插件的 PreToolUse Hook，false 卸载。
 func (claudePlugin *Plugin) ConfigureHook(homeDir string, enable bool) (bool, error) {

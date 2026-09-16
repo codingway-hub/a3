@@ -76,9 +76,13 @@ func (api *Router) HandleListDevices(routerCtx *gin.Context) {
 	routerCtx.JSON(http.StatusOK, gin.H{"items": items})
 }
 
-// HandlePatchDeviceStatus PATCH /devices/:deviceID —— 吊销/恢复设备。
-// body 仅接受 {"status":"revoked"|"active"}；吊销即时生效（Token 鉴权中断），
-// 历史审计数据原样保留；每次变更同事务落 device_revoke/device_restore 审计；
+// HandlePatchDeviceStatus PATCH /devices/:deviceID —— 吊销/禁用/恢复设备。
+// body 仅接受 {"status":"revoked"|"disabled"|"active"}：
+//   - revoked 吊销：Token 立即失效、指纹释放（可重新注册）、历史数据原样保留；
+//   - disabled 禁用：Token 立即失效、身份与指纹保留、不可自助重注册，恢复仅管理员；
+//   - active 恢复：吊销/禁用后的回滚路径（重发 Token 需另走 token 轮换端点）。
+//
+// 每次变更同事务落 device_revoke/device_disable/device_restore 审计；
 // ErrNotFound → 404。
 func (api *Router) HandlePatchDeviceStatus(routerCtx *gin.Context) {
 	var statusRequest struct {
@@ -88,8 +92,8 @@ func (api *Router) HandlePatchDeviceStatus(routerCtx *gin.Context) {
 		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
 		return
 	}
-	if statusRequest.Status != "revoked" && statusRequest.Status != "active" {
-		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "status 仅支持 revoked / active"})
+	if statusRequest.Status != "revoked" && statusRequest.Status != "active" && statusRequest.Status != "disabled" {
+		routerCtx.JSON(http.StatusBadRequest, gin.H{"error": "status 仅支持 revoked / disabled / active"})
 		return
 	}
 

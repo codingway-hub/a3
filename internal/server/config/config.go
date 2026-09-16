@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // 服务端持久状态目录与凭据类密钥文件名。
@@ -42,8 +44,10 @@ type Config struct {
 	NotifyWebhookURL    string // 告警外送 webhook 地址 A3_NOTIFY_WEBHOOK_URL；空则禁用外送
 	NotifyWebhookFormat string // webhook 信封格式 A3_NOTIFY_WEBHOOK_FORMAT：generic|wecom|dingtalk|feishu，默认 generic
 	NotifyMinSeverity   string // 外送最低严重级别 A3_NOTIFY_MIN_SEVERITY：low|medium|high，空=全部
-	TLSCertPath         string // 可选 HTTPS：A3_TLS_CERT；与 TLSKeyPath 必须同时提供
-	TLSKeyPath          string // 可选 HTTPS：A3_TLS_KEY；与 TLSCertPath 必须同时提供
+	DeviceTokenTTL      time.Duration // 设备 Token 有效期 A3_DEVICE_TOKEN_TTL_HOURS；0=永久（默认）。
+	// 仅对配置后新注册/管理员换发的 Token 生效，存量设备不含到期时间（默认永久）。
+	TLSCertPath string // 可选 HTTPS：A3_TLS_CERT；与 TLSKeyPath 必须同时提供
+	TLSKeyPath  string // 可选 HTTPS：A3_TLS_KEY；与 TLSCertPath 必须同时提供
 }
 
 // Load 从环境变量加载配置；缺省值满足本地单机开发开箱即用。
@@ -64,6 +68,15 @@ func Load() (*Config, error) {
 	}
 	if (serverConfig.TLSCertPath == "") != (serverConfig.TLSKeyPath == "") {
 		return nil, fmt.Errorf("A3_TLS_CERT 与 A3_TLS_KEY 必须同时配置才能启用 HTTPS")
+	}
+
+	// 设备 Token 有效期：A3_DEVICE_TOKEN_TTL_HOURS 非负整数小时；空/0 = 永久有效
+	if ttlHoursText := strings.TrimSpace(os.Getenv("A3_DEVICE_TOKEN_TTL_HOURS")); ttlHoursText != "" {
+		ttlHours, parseErr := strconv.Atoi(ttlHoursText)
+		if parseErr != nil || ttlHours < 0 {
+			return nil, fmt.Errorf("A3_DEVICE_TOKEN_TTL_HOURS 非法值 %q：需为非负整数小时", ttlHoursText)
+		}
+		serverConfig.DeviceTokenTTL = time.Duration(ttlHours) * time.Hour
 	}
 
 	// 告警外送配置校验：给了 URL 就必须是合法 http(s) 地址；枚举值非法直接拒绝启动
@@ -234,7 +247,7 @@ func atomicWriteSecret(finalPath string, tempPattern string, payload string, chm
 }
 
 // NotifySeverities 把外送最低严重级别展开为允许外送的 severity 集合，
-// 供通知 worker 直接传给 store.ListUnnotifiedAlerts（该查询要求集合非空）。
+// 供通知 worker 直接传给 store.ClaimDueNotifications（该查询要求集合非空）。
 func (serverConfig *Config) NotifySeverities() []string {
 	switch serverConfig.NotifyMinSeverity {
 	case "high":

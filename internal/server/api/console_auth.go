@@ -55,7 +55,7 @@ func (api *Router) HandleLogin(routerCtx *gin.Context) {
 		return
 	}
 
-	tokenString, signErr := auth.SignJWT(api.jwtSecret, userRow.Username, userRow.Role, consoleSessionTTL)
+	tokenString, signErr := auth.SignJWT(api.jwtSecret, userRow.Username, userRow.Role, userRow.TokenVersion, consoleSessionTTL)
 	if signErr != nil {
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "签发会话失败"})
 		return

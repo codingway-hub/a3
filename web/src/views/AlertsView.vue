@@ -37,8 +37,11 @@
         <template #default="{ row }">
           <el-tag v-if="row.status === 'open'" type="warning" size="small" effect="plain">未确认</el-tag>
           <el-tag v-else type="success" size="small" effect="plain">已确认</el-tag>
-          <el-tooltip v-if="row.notified_at" content="该告警已通过 webhook 外送到通知渠道" placement="top">
+          <el-tooltip v-if="row.notification_status === 'sent'" content="该告警已外送到通知渠道" placement="top">
             <el-tag size="small" effect="plain" type="info" style="margin-left: 4px">已通知</el-tag>
+          </el-tooltip>
+          <el-tooltip v-else-if="row.notification_status === 'failed'" content="外送失败，等待退避重试" placement="top">
+            <el-tag size="small" effect="plain" type="danger" style="margin-left: 4px">通知失败</el-tag>
           </el-tooltip>
         </template>
       </el-table-column>

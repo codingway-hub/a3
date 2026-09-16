@@ -172,6 +172,7 @@ func (api *Router) HandleListCredentialUses(routerCtx *gin.Context) {
 // 终端侧重复注册/重装不再轮换 Token（见 RegisterDeviceAtomic），本端点为主机丢失
 // 令牌时人工恢复的受控通道：换发后旧 Token 立即失效，新 Token 明文仅此一次返回，
 // 待管理员人工转交设备主。admin-only，落 device_token_rotate 审计。
+// 配置了 A3_DEVICE_TOKEN_TTL_HOURS 时，换发后的 Token 同样带到期时间。
 func (api *Router) HandleRotateDeviceToken(routerCtx *gin.Context) {
 	operator, hasOperator := auth.UsernameFrom(routerCtx)
 	if !hasOperator {
@@ -184,13 +185,18 @@ func (api *Router) HandleRotateDeviceToken(routerCtx *gin.Context) {
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "生成设备 Token 失败"})
 		return
 	}
+	var tokenExpiresAt *time.Time
+	if api.deviceTokenTTL > 0 {
+		expiresAt := time.Now().Add(api.deviceTokenTTL)
+		tokenExpiresAt = &expiresAt
+	}
 	rotateErr := api.eventStore.RotateDeviceTokenWithAudit(
-		routerCtx.Request.Context(), deviceID, auth.HashToken(newToken), operator)
+		routerCtx.Request.Context(), deviceID, auth.HashToken(newToken), tokenExpiresAt, operator)
 	switch {
 	case rotateErr == nil:
 		routerCtx.JSON(http.StatusOK, gin.H{"device_id": deviceID, "token": newToken})
 	case errors.Is(rotateErr, store.ErrNotFound):
-		routerCtx.JSON(http.StatusNotFound, gin.H{"error": "设备不存在或已吊销"})
+		routerCtx.JSON(http.StatusNotFound, gin.H{"error": "设备不存在或已吊销/禁用"})
 	default:
 		routerCtx.JSON(http.StatusInternalServerError, gin.H{"error": "轮换失败"})
 	}

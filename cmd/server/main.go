@@ -87,7 +87,8 @@ func main() {
 		WebDist:    serverConfig.WebDist,
 		AgentDist:  serverConfig.AgentDist,
 		PublicURL:  serverConfig.PublicURL,
-		DeviceAPI:  ingest.NewHandler(ingest.NewService(eventStore, alertService)),
+		DeviceAPI:  ingest.NewHandler(ingest.NewService(eventStore, alertService, serverConfig.DeviceTokenTTL)),
+		DeviceTokenTTL: serverConfig.DeviceTokenTTL,
 		Version:    serverVersion,
 	})
 	engine := router.Setup()

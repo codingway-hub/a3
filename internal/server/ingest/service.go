@@ -87,13 +87,23 @@ type BatchResult struct {
 
 // Service 是终端接入服务。
 type Service struct {
-	eventStore   *store.Store
-	alertService *alert.Service
+	eventStore     *store.Store
+	alertService   *alert.Service
+	deviceTokenTTL time.Duration // 设备 Token 有效期；0 = 永久（默认）。注册/换发时落到期时间
 }
 
-// NewService 构建接入服务。
-func NewService(eventStore *store.Store, alertService *alert.Service) *Service {
-	return &Service{eventStore: eventStore, alertService: alertService}
+// NewService 构建接入服务；deviceTokenTTL<=0 表示设备 Token 永久有效。
+func NewService(eventStore *store.Store, alertService *alert.Service, deviceTokenTTL time.Duration) *Service {
+	return &Service{eventStore: eventStore, alertService: alertService, deviceTokenTTL: deviceTokenTTL}
+}
+
+// deviceTokenExpiry 计算新发 Token 的到期时间；TTL 未配置（0=永久）时返回 nil。
+func (service *Service) deviceTokenExpiry() *time.Time {
+	if service.deviceTokenTTL <= 0 {
+		return nil
+	}
+	expiresAt := time.Now().Add(service.deviceTokenTTL)
+	return &expiresAt
 }
 
 // RegisterDevice 注册设备——统一门禁为管理员下发的一次性安装凭据（installCode）：
@@ -135,6 +145,7 @@ func (service *Service) RegisterDevice(ctx context.Context,
 		OS:                 registerInput.OS,
 		Arch:               registerInput.Arch,
 		Status:             "active",
+		TokenExpiresAt:     service.deviceTokenExpiry(),
 	}
 	claimedTokenHash := ""
 	if claimedToken != "" {

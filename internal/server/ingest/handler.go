@@ -90,6 +90,9 @@ func (handler *Handler) HandleRegister(routerCtx *gin.Context) {
 		routerCtx.JSON(http.StatusForbidden, gin.H{"error": ErrCredentialUsedUp.Error()})
 	case errors.Is(registerErr, ErrCredentialInvalid), errors.Is(registerErr, ErrCredentialUnknown):
 		routerCtx.JSON(http.StatusForbidden, gin.H{"error": "安装凭据无效，请联系管理员重新生成"})
+	case errors.Is(registerErr, store.ErrDeviceDisabled):
+		// 禁用态：身份保留、指纹未释放、不可自助重注册，须管理员恢复后方可再注册
+		routerCtx.JSON(http.StatusForbidden, gin.H{"error": "设备已被禁用，请联系管理员恢复后再注册"})
 	case errors.Is(registerErr, store.ErrCredentialMismatch):
 		routerCtx.JSON(http.StatusForbidden, gin.H{"error": "携带的 Token 与设备不符，拒绝复用身份"})
 	case errors.Is(registerErr, store.ErrCredentialRequired):

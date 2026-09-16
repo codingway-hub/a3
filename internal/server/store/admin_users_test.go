@@ -106,3 +106,43 @@ func TestAdminUserRoleConstraint(t *testing.T) {
 	require.Error(t, constraintErr)
 	assert.NotErrorIs(t, constraintErr, ErrAlreadyExists)
 }
+
+// TestAdminUserTokenVersionRevocation 状态变更（停用/启用/改角色/重置口令）自增
+// 代际号；会话态查询（GetAdminUserSessionState）反映最新版本——RequireJWT 据此
+// 立即作废既定状态变更前签发的全部 JWT。
+func TestAdminUserTokenVersionRevocation(t *testing.T) {
+	testPool := newTestPool(t)
+	resetTablesForTest(t, testPool, "admin_users")
+	userStore := NewStore(testPool)
+	ctx := context.Background()
+
+	mustCreateUser(t, userStore, "boss", "admin")
+	bossRow, fetchErr := userStore.GetAdminUserByUsername(ctx, "boss")
+	require.NoError(t, fetchErr)
+	assert.Equal(t, int64(0), bossRow.TokenVersion, "新账号代际号为 0")
+
+	// 停用 → 1；启用 → 2；改角色 → 3；重置口令 → 4
+	disabledRow, disableErr := userStore.SetAdminUserEnabled(ctx, bossRow.ID, false)
+	require.NoError(t, disableErr)
+	assert.Equal(t, int64(1), disabledRow.TokenVersion)
+	enabledRow, enableErr := userStore.SetAdminUserEnabled(ctx, bossRow.ID, true)
+	require.NoError(t, enableErr)
+	assert.Equal(t, int64(2), enabledRow.TokenVersion)
+	roleRow, roleErr := userStore.SetAdminUserRole(ctx, bossRow.ID, "auditor")
+	require.NoError(t, roleErr)
+	assert.Equal(t, int64(3), roleRow.TokenVersion)
+	require.NoError(t, userStore.SetAdminUserPassword(ctx, bossRow.ID, "hash-new"))
+	passwordRow, passwordErr := userStore.GetAdminUserByUsername(ctx, "boss")
+	require.NoError(t, passwordErr)
+	assert.Equal(t, int64(4), passwordRow.TokenVersion)
+
+	// 会话态查询同步最新：启用态 + 最新代际号
+	stateEnabled, stateVersion, stateErr := userStore.GetAdminUserSessionState(ctx, "boss")
+	require.NoError(t, stateErr)
+	assert.True(t, stateEnabled)
+	assert.Equal(t, int64(4), stateVersion)
+
+	// 账号不存在 → ErrNotFound
+	_, _, missingErr := userStore.GetAdminUserSessionState(ctx, "nobody")
+	assert.ErrorIs(t, missingErr, ErrNotFound)
+}

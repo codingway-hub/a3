@@ -190,7 +190,7 @@ func TestRotateDeviceTokenWithAudit(t *testing.T) {
 	seeded := &Device{DeviceID: "dev-rotate-001", TokenHash: "hash-old-001", Hostname: "macbook"}
 	require.NoError(t, deviceStore.CreateDevice(ctx, seeded))
 
-	require.NoError(t, deviceStore.RotateDeviceTokenWithAudit(ctx, "dev-rotate-001", "hash-new-001", "admin-oper"))
+	require.NoError(t, deviceStore.RotateDeviceTokenWithAudit(ctx, "dev-rotate-001", "hash-new-001", nil, "admin-oper"))
 
 	fetched, fetchErr := deviceStore.GetDeviceByTokenHash(ctx, "hash-new-001")
 	require.NoError(t, fetchErr)
@@ -208,6 +208,69 @@ func TestRotateDeviceTokenWithAudit(t *testing.T) {
 
 	// 已吊销设备禁止轮换
 	require.NoError(t, deviceStore.SetDeviceStatus(ctx, "dev-rotate-001", "revoked"))
-	rotateErr := deviceStore.RotateDeviceTokenWithAudit(ctx, "dev-rotate-001", "hash-x", "admin-oper")
+	rotateErr := deviceStore.RotateDeviceTokenWithAudit(ctx, "dev-rotate-001", "hash-x", nil, "admin-oper")
 	assert.ErrorIs(t, rotateErr, ErrNotFound, "已吊销设备换发应拒绝（走吊销后重注册）")
+}
+
+// TestRegisterDeviceAtomicDisabledRejected 禁用态设备不可自助重注册：身份保留、
+// 指纹未释放，即使携带旧 Token 凭证证明也不能自我激活，恢复仅管理员操作。
+func TestRegisterDeviceAtomicDisabledRejected(t *testing.T) {
+	testPool := newTestPool(t)
+	resetTablesForTest(t, testPool, "devices")
+	deviceStore := NewStore(testPool)
+	ctx := context.Background()
+
+	seeded := &Device{DeviceID: "dev-disable-001", TokenHash: "hash-active-001",
+		MachineFingerprint: "fp-disable-001", Hostname: "macmini"}
+	require.NoError(t, deviceStore.CreateDevice(ctx, seeded))
+
+	// 管理员禁用
+	require.NoError(t, deviceStore.SetDeviceStatus(ctx, "dev-disable-001", "disabled"))
+
+	// 同指纹自助重注册（携带旧 Token 凭证证明也拒绝）
+	reRegister := &Device{DeviceID: "dev-disable-002", TokenHash: "hash-new",
+		MachineFingerprint: "fp-disable-001", Hostname: "reinstall"}
+	_, _, registerErr := deviceStore.RegisterDeviceAtomic(ctx, reRegister, "hash-active-001")
+	assert.ErrorIs(t, registerErr, ErrDeviceDisabled, "禁用态指纹不可自助激活")
+
+	// 管理员恢复 active 后，凭证匹配 → 复用原身份成功（created=false）
+	require.NoError(t, deviceStore.SetDeviceStatus(ctx, "dev-disable-001", "active"))
+	_, created, reuseErr := deviceStore.RegisterDeviceAtomic(ctx, reRegister, "hash-active-001")
+	require.NoError(t, reuseErr)
+	assert.False(t, created, "恢复后同指纹同凭证应复用而非新建")
+}
+
+// TestDeviceTokenExpiryRoundTrip 设备 Token 到期时间落库/反查：nil 表示永久；
+// 管理员换发可落到期时间（TTL 配置场景）。
+func TestDeviceTokenExpiryRoundTrip(t *testing.T) {
+	testPool := newTestPool(t)
+	resetTablesForTest(t, testPool, "devices")
+	deviceStore := NewStore(testPool)
+	ctx := context.Background()
+
+	// 带到期时间：注册新设备落 token_expires_at
+	expiresAt := time.Now().Add(24 * time.Hour)
+	withExpiry := &Device{DeviceID: "dev-expiry-001", TokenHash: "hash-exp-001",
+		Hostname: "host-a", TokenExpiresAt: &expiresAt}
+	require.NoError(t, deviceStore.CreateDevice(ctx, withExpiry))
+
+	fetched, fetchErr := deviceStore.GetDeviceByTokenHash(ctx, "hash-exp-001")
+	require.NoError(t, fetchErr)
+	require.NotNil(t, fetched.TokenExpiresAt)
+	assert.WithinDuration(t, expiresAt, *fetched.TokenExpiresAt, time.Second)
+
+	// TTL 未配置（时代到期字段为 NULL）→ nil
+	noExpiry := &Device{DeviceID: "dev-expiry-002", TokenHash: "hash-exp-002", Hostname: "host-b"}
+	require.NoError(t, deviceStore.CreateDevice(ctx, noExpiry))
+	fetchedNil, fetchErr := deviceStore.GetDeviceByTokenHash(ctx, "hash-exp-002")
+	require.NoError(t, fetchErr)
+	assert.Nil(t, fetchedNil.TokenExpiresAt, "TTL 未配置时到期时间为 NULL")
+
+	// 管理员换发落到期时间
+	rotateExpiry := time.Now().Add(2 * time.Hour)
+	require.NoError(t, deviceStore.RotateDeviceTokenWithAudit(ctx, "dev-expiry-002", "hash-exp-003", &rotateExpiry, "admin-oper"))
+	rotated, rotatedErr := deviceStore.GetDeviceByTokenHash(ctx, "hash-exp-003")
+	require.NoError(t, rotatedErr)
+	require.NotNil(t, rotated.TokenExpiresAt)
+	assert.WithinDuration(t, rotateExpiry, *rotated.TokenExpiresAt, time.Second)
 }

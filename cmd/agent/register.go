@@ -226,7 +226,12 @@ func hookCommand(flagArguments []string) int {
 		fmt.Fprintf(os.Stderr, "a3 hook 目标插件不可用(%v)，已放行\n", registryErr)
 		return 0
 	}
-	hookPlugin := pluginRegistry.All()[0]
+	hookPlugin, canIntercept := preToolUsePluginOf(pluginRegistry, targetPluginNames[0])
+	if !canIntercept {
+		// 纯审计插件无前置拦截能力：目标由人工/宿主显式指定，不报错阻断，fail-open 放行。
+		fmt.Fprintf(os.Stderr, "a3 hook 目标插件 %s 不支持前置拦截，已放行\n", targetPluginNames[0])
+		return 0
+	}
 	if len(targetPluginNames) > 1 {
 		fmt.Fprintf(os.Stderr, "a3 hook 单进程仅裁决一个插件，使用 %s\n", hookPlugin.Name())
 	}
@@ -238,18 +243,24 @@ func hookCommand(flagArguments []string) int {
 		}, agentVersion)
 }
 
-// runPreToolUseCLI 通用 PreToolUse CLI 流水线：stdin JSON → 插件裁决 → 信封入队 → 退出码。
-// 仅实现了 RunPreToolUse 的插件具备前置裁决能力；纯审计型插件（无该能力）恒放行。
-func runPreToolUseCLI(agentPlugin core.Plugin, stdin io.Reader, stderr io.Writer,
-	envelopeSink func(envelopeBytes []byte), versionText string) int {
-	preToolUseRunner, canRun := agentPlugin.(interface {
-		RunPreToolUse(stdin io.Reader, stderr io.Writer,
-			envelopeSink func(envelopeBytes []byte), agentVersion string) int
-	})
-	if !canRun {
-		return 0
+// preToolUsePluginOf 从注册表按名称取插件并断言其具备前置拦截能力。
+// 名称缺失或插件为纯审计型（未实现 PreToolUsePlugin）时返回 (nil, false)。
+// 替代原先「恒取首个插件 + ErrHookUnsupported 哨兵」的装配假设。
+func preToolUsePluginOf(pluginRegistry *core.Registry, pluginName string) (core.PreToolUsePlugin, bool) {
+	agentPlugin, found := pluginRegistry.Get(pluginName)
+	if !found {
+		return nil, false
 	}
-	return preToolUseRunner.RunPreToolUse(stdin, stderr, envelopeSink, versionText)
+	hookPlugin, canIntercept := agentPlugin.(core.PreToolUsePlugin)
+	return hookPlugin, canIntercept
+}
+
+// runPreToolUseCLI 前置裁决 CLI 流水线：stdin JSON → 插件裁决 → 信封入队 → 退出码。
+// 仅实现 PreToolUsePlugin 的插件具备前置裁决能力；纯审计型插件在调用前已被
+// 类型断言排拒（fail-open），不会走到这里。
+func runPreToolUseCLI(agentPlugin core.PreToolUsePlugin, stdin io.Reader, stderr io.Writer,
+	envelopeSink func(envelopeBytes []byte), versionText string) int {
+	return agentPlugin.RunPreToolUse(stdin, stderr, envelopeSink, versionText)
 }
 
 // extractHookPluginTargets 解析 hook 子命令的目标插件与其余配置参数：
@@ -344,11 +355,12 @@ func installHookCommand(flagArguments []string) int {
 			exitCode = 1
 			continue
 		}
-		changed, configureErr := pluginRegistry.All()[0].ConfigureHook(homeDir, true)
-		if errors.Is(configureErr, core.ErrHookUnsupported) {
+		hookPlugin, canIntercept := preToolUsePluginOf(pluginRegistry, targetName)
+		if !canIntercept {
 			fmt.Printf("ℹ️ %s 不支持前置 Hook（纯审计采集，无需安装）\n", targetName)
 			continue
 		}
+		changed, configureErr := hookPlugin.ConfigureHook(homeDir, true)
 		if configureErr != nil {
 			fmt.Fprintf(os.Stderr, "安装 %s 失败: %v\n", targetName, configureErr)
 			exitCode = 1
@@ -387,10 +399,11 @@ func uninstallHookCommand(flagArguments []string) int {
 			exitCode = 1
 			continue
 		}
-		changed, configureErr := pluginRegistry.All()[0].ConfigureHook(homeDir, false)
-		if errors.Is(configureErr, core.ErrHookUnsupported) {
-			continue
+		hookPlugin, canIntercept := preToolUsePluginOf(pluginRegistry, targetName)
+		if !canIntercept {
+			continue // 纯审计插件本就无可卸载内容，静默跳过
 		}
+		changed, configureErr := hookPlugin.ConfigureHook(homeDir, false)
 		if configureErr != nil {
 			fmt.Fprintf(os.Stderr, "卸载 %s 失败: %v\n", targetName, configureErr)
 			exitCode = 1
