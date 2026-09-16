@@ -1,0 +1,158 @@
+internal/server/ingest/handler_test.go
+  s_4bc81d28157254::t_18f08249f0856e 41
+internal/server/store/admin_users_test.go
+  s_4bc81d28157254::t_bbd12f49e3d64a 109-148
+internal/server/store/notification_outbox.go
+  s_4bc81d28157254::t_b0dc136320f536 63-65,67
+  s_4bc81d28157254::t_015793e5b0cf04 38-39,42-43
+  s_4bc81d28157254::t_3d7935a3142680 1-33,35-36,41,44-62,66,68-138
+  s_4bc81d28157254::t_44f264436cd3b0 34,37,40
+internal/agent/core/plugin.go
+  s_4bc81d28157254::t_4ab678d0688ffd 5
+  s_4bc81d28157254::t_424ede5bc96673 35-37,48,50-56,59
+internal/agent/core/registry_test.go
+  s_4bc81d28157254::t_670b75b453d7b1 14,29-46,49,53-58
+  s_4bc81d28157254::t_46c7591d70ddfd 5
+  s_4bc81d28157254::t_328972b72ac28c 80-99
+migrations/0013_token_hardening.down.sql
+  s_4bc81d28157254::t_4fbdec35270f90 1-14
+internal/server/config/config.go
+  s_4bc81d28157254::t_9f7dc796bfec11 47-50
+  s_4bc81d28157254::t_8c75ca131eb9ac 73-81
+  s_4bc81d28157254::t_f9ec5a4e87a1e5 14,16
+  s_4bc81d28157254::t_a67ba2b6b999c1 250
+internal/server/api/console_auth.go
+  s_4bc81d28157254::t_83b8dc3fa26733 58
+internal/server/auth/jwt_test.go
+  s_4bc81d28157254::t_d41ff8d153a7c8 15,18,24,27,33,37,42,51,64,75,88,93,99,109,112-130
+internal/server/ingest/service_test.go
+  s_4bc81d28157254::t_e5bfa4ff9e39f4 39
+  s_4bc81d28157254::t_cbf75ee74044f6 155,161,169,193,211
+  s_4bc81d28157254::t_2bab354b175e4c 373-381,383,385-387,391,402-410
+  s_4bc81d28157254::t_27ade88206bbd3 382,384,388-390,392-401
+internal/server/api/console_alerts.go
+  s_4bc81d28157254::t_47ba7a26c799bf 124-125
+internal/server/notify/worker.go
+  s_4bc81d28157254::t_a52ebb00ea4f8d 1,12,18-19,22-24,33-34,51-52,57-58,61-62,67-68,73-75,77,79-81,83-84,86-89,94-104,106-107,110,112-123,127-128,133-136,138-146
+internal/server/notify/webhook_test.go
+  s_4bc81d28157254::t_bc7a572d7f7575 7
+  s_4bc81d28157254::t_b6df230d5e569f 31-33,44
+  s_4bc81d28157254::t_f723fcafae056a 67,78
+  s_4bc81d28157254::t_b4c8f1dc423cd6 157-203
+internal/server/notify/webhook.go
+  s_4bc81d28157254::t_a1fdce2b334139 139-147
+  s_4bc81d28157254::t_6bc01d4f784302 49-50,53,61-138,148-150
+  s_4bc81d28157254::t_d19f94a79ead4b 1,4-5,7-9,20
+  s_4bc81d28157254::t_3b4f51326592cc 151
+cmd/agent/hook_capability_test.go
+  s_4bc81d28157254::t_621ad44d3f4773 1-79
+  s_4bc81d28157254::t_00d9223badf875 80
+internal/server/api/router.go
+  s_4bc81d28157254::t_4cd656933fbe21 87
+  s_4bc81d28157254::t_d0974c05cebbde 41,46-53
+  s_4bc81d28157254::t_39ce79d619d99f 117
+internal/agent/plugins/codex/doc.go
+  s_4bc81d28157254::t_b632551941f6c7 4-5
+web/src/views/AlertsView.vue
+  s_4bc81d28157254::t_f38fef791f3fe5 40,43-44
+  s_4bc81d28157254::t_a39ce037952946 45
+internal/server/api/console_credentials.go
+  s_4bc81d28157254::t_7230fe98790532 175,188-192,194,199
+internal/server/ingest/service.go
+  s_4bc81d28157254::t_41bfd9480bf512 90-92,95-106
+  s_4bc81d28157254::t_ac2751234adae7 148
+internal/server/store/alerts.go
+  s_4bc81d28157254::t_d56ed36c78405f 78
+  s_4bc81d28157254::t_81a7b622c5ea6d 161
+  s_4bc81d28157254::t_7c394c9a956507 23-26,29-30,32-38,44-50
+internal/server/store/scan.go
+  s_4bc81d28157254::t_ebeefec2927a0a 57-58,60-61,64-69
+internal/server/api/console_devices.go
+  s_4bc81d28157254::t_c26804c148b72b 79-85,95-96
+internal/server/store/devices_test.go
+  s_4bc81d28157254::t_3384493b08c6d2 211
+  s_4bc81d28157254::t_d90827dc372f9f 214-276
+  s_4bc81d28157254::t_6c9db239ce3444 193
+internal/agent/plugins/claude/installer.go
+  s_4bc81d28157254::t_2061f991a736df 33-34
+internal/server/store/migrate_test.go
+  s_4bc81d28157254::t_61c79ae94cc599 244
+  s_4bc81d28157254::t_8ace6219627a12 38
+migrations/0014_notify_outbox.down.sql
+  s_4bc81d28157254::t_8b37bf24e2d7ab 1-13
+migrations/0014_notify_outbox.up.sql
+  s_4bc81d28157254::t_a6bb9c89cca203 29-31
+  s_4bc81d28157254::t_0e42cec600e8ec 43
+  s_4bc81d28157254::t_9f6aa13197af5f 1-27,32-42
+  s_4bc81d28157254::t_89441ea1f334fa 28
+migrations/0013_token_hardening.up.sql
+  s_4bc81d28157254::t_eab3cf0dcec93e 1-15,17-19,22
+  s_4bc81d28157254::t_8d6a6a7c745af3 16,20-21
+internal/server/store/notification_outbox_test.go
+  s_4bc81d28157254::t_fdff9b522cef92 5
+  s_4bc81d28157254::t_36ee61ca27f146 132-136,138,141
+  s_4bc81d28157254::t_2843f80f3f4c8f 121,123-127,137
+  s_4bc81d28157254::t_e0f39b5fbbe3db 122
+  s_4bc81d28157254::t_87cdf7d7365276 1-4,6-120,128-131,139-140,142-174
+cmd/server/main.go
+  s_4bc81d28157254::t_73da224d9b6f4e 90-91
+internal/server/store/admin_users.go
+  s_4bc81d28157254::t_6dad43e870da4f 21-24,30,32
+  s_4bc81d28157254::t_0c5b8c72e6d7f8 158
+  s_4bc81d28157254::t_17a57116873e01 187,198
+  s_4bc81d28157254::t_3ea8bd4e668e3b 63,70-85
+  s_4bc81d28157254::t_6a13ab45f6641e 101,110,113,117-118,121,130,138,141
+  s_4bc81d28157254::t_8b41a87612babd 86-87
+internal/server/auth/jwt.go
+  s_4bc81d28157254::t_7acf62199934e7 30,32-33,37,44-46,54,66,69,73,80,85,89,94,98,100-101,104,106
+internal/server/store/devices.go
+  s_4bc81d28157254::t_ac63f586abfa8c 135-140
+  s_4bc81d28157254::t_c0add6ced1b032 96-97,102
+  s_4bc81d28157254::t_d28c32ab386717 153-155,170-171
+  s_4bc81d28157254::t_f87517e8fbf246 25-28,37,46-48
+  s_4bc81d28157254::t_7f0fd3f71ba326 243
+  s_4bc81d28157254::t_9355a687779eca 79-81
+  s_4bc81d28157254::t_daaa73701d91cf 60-61,64
+  s_4bc81d28157254::t_65c045c7395bb1 186-187,190
+  s_4bc81d28157254::t_4579988f0326cd 315
+internal/server/store/audit.go
+  s_4bc81d28157254::t_0ccd2fb0669240 162,167-169,176-178
+  s_4bc81d28157254::t_ae07e0540ab422 20-24
+internal/agent/plugins/codex/plugin.go
+  s_4bc81d28157254::t_9c9adcedd2ac3a 44-45
+internal/server/ingest/handler.go
+  s_4bc81d28157254::t_7c575810c1c552 93-95
+internal/server/auth/middleware.go
+  s_4bc81d28157254::t_009edd0a06d243 4,6,21-27,29-31,45-50,58-64,71,76-87,95-96
+cmd/agent/register.go
+  s_4bc81d28157254::t_6f736355a7594f 229-234,246,248-261,263
+  s_4bc81d28157254::t_f1e357e16e0263 358-359,363
+  s_4bc81d28157254::t_3ec5b6ce7f5869 247
+  s_4bc81d28157254::t_39dfbf654f7c1d 402-404,406
+internal/server/notify/worker_test.go
+  s_4bc81d28157254::t_e6760df4cc9ca7 12,14,22,34-77,109,116,127-134,152,157,159-168,170-171,173-178,193,199-202,205-213,216,224,229,232,244-247,251-261,263-266
+internal/server/auth/middleware_test.go
+  s_4bc81d28157254::t_9193e05d9f51b9 160,230-275,279,290-291
+  s_4bc81d28157254::t_e8fae3386c2c63 223
+  s_4bc81d28157254::t_17131e642c2608 149-152,157-159
+  s_4bc81d28157254::t_faf9276bc69058 55-74,77-80,87,94,101,113-148,153-156
+  s_4bc81d28157254::t_76a254a6de072c 276-278,280-289
+  s_4bc81d28157254::t_bae83dc1cdbc38 294-297,300,308,316,325
+  s_4bc81d28157254::t_eaafda10c95d41 161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b4771890a2c98f087602a4bd1c035096d02309e1",
+  "prompts": {},
+  "sessions": {
+    "s_4bc81d28157254": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "57c784bf-446a-491b-b070-31b99c5214db",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "codingway-hub <codingway-hub@abc.com>"
+    }
+  }
+}
